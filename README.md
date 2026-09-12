@@ -43,9 +43,15 @@ pytest -q -o addopts= tests
 
 Tests are offline: they use an injected fake runner and temporary manifests, never the weights.
 
+## Tutorials
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/qwen3-embedding-pipeline/blob/main/tutorials/qwen3_embedding_colab.ipynb)
+
+`tutorials/qwen3_embedding_colab.ipynb` is declared `TASK-INFERENCE` under DIMER Notebook Specification 1.0. Its default path embeds the four sentences of the pinned upstream README (bundled as literals with ids `q1`, `q2`, `d1`, `d2`; no download), surfaces the batch/token/character ceilings and the query instruction, resolves the pinned model through the package's staging and verification path, embeds queries and documents through `Qwen3EmbeddingPipeline.embed`, states that embeddings are representations with no intrinsic metric, shows the query–document cosine table as a qualitative check only, and exports identifiers alongside vectors (CSV) plus JSON provenance. CPU is slow for corpora but fine for a handful of sentences. BYOD is optional and gated off by default. See `tutorials/README.md` for the registry and `docs/release-verification.md` for the release gate.
+
 ## Release status
 
-**Candidate / source-complete** (`STATUS.md`). Card pass only; no tutorial notebook yet.
+**Candidate.** Static/unit checks do not constitute clean-runtime notebook evidence. The clean-runtime run of the tutorial is pending; complete `docs/release-verification.md` against the exact release revision before calling the notebook release-grade.
 
 ## Licensing
 
