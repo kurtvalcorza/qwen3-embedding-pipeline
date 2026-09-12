@@ -20,7 +20,11 @@ base_model: Qwen/Qwen3-Embedding-0.6B
 
 ## Interactive Colab Tutorials
 
-This release ships no tutorial notebook (`tutorials/` is absent). The package is exercised through its test suite (`tests/`) and the run instructions in the README; a `NOTEBOOK_SPEC` 1.0 `TASK-INFERENCE` notebook is a follow-up, not a claim this card makes.
+This pipeline provides a ready-to-run interactive Google Colab notebook that exercises the repository's public API end to end — bootstrap a fresh runtime, stage and verify the pinned upstream revision, validate an input, run the task, and inspect and export the outputs:
+
+- **Task Inference Tutorial**:  
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/qwen3-embedding-pipeline/blob/main/tutorials/qwen3_embedding_colab.ipynb) [`qwen3_embedding_colab.ipynb`](https://github.com/kurtvalcorza/qwen3-embedding-pipeline/blob/main/tutorials/qwen3_embedding_colab.ipynb)  
+  *Text embeddings with the pinned `Qwen/Qwen3-Embedding-0.6B` weights: 1024-d last-token-pooled, L2-normalised vectors with instruction-aware queries; representations, not predictions; query–document cosine as a qualitative check only, no metric.*
 
 ---
 
