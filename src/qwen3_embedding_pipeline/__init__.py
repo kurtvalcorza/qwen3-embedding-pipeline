@@ -2,6 +2,7 @@ from .pipeline import (
     DEFAULT_QUERY_INSTRUCTION,
     DEFAULT_WEIGHTS_DIR,
     EMBEDDING_DIM,
+    INPUT_SCHEMA,
     MAX_BATCH,
     MAX_TEXT_CHARS,
     MAX_TEXT_TOKENS,
@@ -11,7 +12,9 @@ from .pipeline import (
     MODEL_REVISION,
     Qwen3EmbeddingPipeline,
     cosine_similarity,
+    evaluation_report,
     stage_missing_files,
+    validate_inputs,
     verify_snapshot,
 )
 
@@ -19,6 +22,7 @@ __all__ = [
     "DEFAULT_QUERY_INSTRUCTION",
     "DEFAULT_WEIGHTS_DIR",
     "EMBEDDING_DIM",
+    "INPUT_SCHEMA",
     "MAX_BATCH",
     "MAX_TEXT_CHARS",
     "MAX_TEXT_TOKENS",
@@ -28,6 +32,8 @@ __all__ = [
     "MODEL_REVISION",
     "Qwen3EmbeddingPipeline",
     "cosine_similarity",
+    "evaluation_report",
     "stage_missing_files",
+    "validate_inputs",
     "verify_snapshot",
 ]

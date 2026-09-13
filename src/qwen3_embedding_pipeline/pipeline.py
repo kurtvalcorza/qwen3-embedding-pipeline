@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -110,6 +110,115 @@ def cosine_similarity(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]]
     return (x @ y.T).tolist()
 
 
+INPUT_SCHEMA: dict[str, Any] = {
+    "input": "sequence of non-empty str; one vector is returned per text, in input order",
+    "batch": [1, MAX_BATCH],
+    "text_chars": [1, MAX_TEXT_CHARS],
+    "text_tokens": [1, MAX_TEXT_TOKENS],
+    "kind": list(KINDS),
+    "embedding_dim": EMBEDDING_DIM,
+    "preprocessing": (
+        "left-padded tokenisation truncated at MAX_TEXT_TOKENS; kind='query' prepends "
+        "'Instruct: <instruction>\\nQuery:'; last-token pooling, then L2 normalisation"
+    ),
+}
+
+
+def _check_inputs(texts: Any, kind: str, instruction: str) -> list[str]:
+    """Raise TypeError/ValueError naming the first violated ceiling; return the texts as a list."""
+    if isinstance(texts, str | bytes) or not isinstance(texts, Sequence):
+        raise TypeError("texts must be a list of str, not a single string")
+    if not 1 <= len(texts) <= MAX_BATCH:
+        raise ValueError(f"texts must hold 1..{MAX_BATCH} items, got {len(texts)}")
+    for i, text in enumerate(texts):
+        if not isinstance(text, str):
+            raise TypeError(f"texts[{i}] must be str, got {type(text).__name__}")
+        if not text.strip():
+            raise ValueError(f"texts[{i}] is empty")
+        if len(text) > MAX_TEXT_CHARS:
+            raise ValueError(f"texts[{i}] has {len(text)} chars; ceiling is {MAX_TEXT_CHARS}")
+    if kind not in KINDS:
+        raise ValueError(f"kind must be one of {KINDS}")
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise ValueError("instruction must be a non-empty str")
+    return list(texts)
+
+
+def validate_inputs(
+    texts: Sequence[str],
+    kind: str = "document",
+    instruction: str = DEFAULT_QUERY_INSTRUCTION,
+    *,
+    names: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Validation stage: return the input manifest (schema, per-input observations, verdict).
+
+    Rejection is reported by raising exactly as ``embed`` would — both route through
+    ``_check_inputs`` — so a caller that wants the finding recorded catches the exception and
+    stores ``str(exc)`` under ``findings``. Token-level truncation cannot be observed here
+    because it happens inside the tokenizer; ``embed`` reports it in ``truncated``.
+    """
+    checked = _check_inputs(texts, kind, instruction)
+    if names is not None and len(names) != len(checked):
+        raise ValueError("names must have one entry per text")
+    return {
+        "schema": dict(INPUT_SCHEMA),
+        "inputs": [
+            {"id": names[i] if names else f"text-{i}", "chars": len(text), "kind": kind}
+            for i, text in enumerate(checked)
+        ],
+        "kind": kind,
+        "instruction": instruction if kind == "query" else None,
+        "verdict": "accepted",
+        "findings": [],
+        "model_id": MODEL_ID,
+        "model_revision": MODEL_REVISION,
+    }
+
+
+def evaluation_report(
+    result: Mapping[str, Any], labels: Sequence[Any] | None = None, *, sample_kind: str = "synthetic"
+) -> dict[str, Any]:
+    """Evaluation stage: a machine-readable report even though no metric exists here.
+
+    Embeddings are representations, so the repository ships no performance metric —
+    ``cosine_similarity`` is a comparison helper, not a score against ground truth. The verdict
+    is therefore always ``not-measurable`` (EVAL9), including when ``labels`` is supplied:
+    the parameter exists for interface parity with the fleet's other pipelines and is recorded
+    in ``reason`` rather than scored.
+    """
+    embeddings = result["embeddings"]
+    supplied = labels is not None
+    return {
+        "task": "text embedding (dense representation, no label space)",
+        "score_semantics": (
+            f"{EMBEDDING_DIM}-d unit-norm vectors, {POOLING} pooling; cosine between two vectors of "
+            "this model is a similarity in [-1, 1], not a probability and not calibrated"
+        ),
+        "sample_kind": sample_kind,
+        "n_texts": len(embeddings),
+        "metrics": [],
+        "baselines": [],
+        "verdict": "not-measurable",
+        "reason": (
+            "the output is a representation, not a prediction: the pipeline exposes no performance "
+            "metric, only the cosine_similarity comparison helper"
+            + (
+                "; labels were supplied but no metric helper exists to score them here"
+                if supplied
+                else ""
+            )
+        ),
+        "needs": (
+            "a downstream labelled task: for retrieval, a query-document set with relevance "
+            "judgements scored by nDCG@k or recall@k; for classification or clustering, labelled "
+            "texts and a fitted classifier or cluster assignment — none of which this repository ships"
+        ),
+        "model_id": MODEL_ID,
+        "model_revision": MODEL_REVISION,
+    }
+
+
 @dataclass
 class Qwen3EmbeddingPipeline:
     """Text embedder. `_runner` maps formatted texts to (pooled un-normalised vectors, token counts)."""
@@ -157,6 +266,9 @@ class Qwen3EmbeddingPipeline:
 
         return cls(runner, resolved_device)
 
+    def _validate(self, texts: Any, kind: str, instruction: str) -> list[str]:
+        return _check_inputs(texts, kind, instruction)
+
     def embed(
         self,
         texts: Sequence[str],
@@ -164,22 +276,7 @@ class Qwen3EmbeddingPipeline:
         instruction: str = DEFAULT_QUERY_INSTRUCTION,
     ) -> dict[str, Any]:
         """Embed up to MAX_BATCH texts. `kind="query"` prepends the instruction; documents get none."""
-        if isinstance(texts, str | bytes) or not isinstance(texts, Sequence):
-            raise TypeError("texts must be a list of str, not a single string")
-        if not 1 <= len(texts) <= MAX_BATCH:
-            raise ValueError(f"texts must hold 1..{MAX_BATCH} items, got {len(texts)}")
-        for i, text in enumerate(texts):
-            if not isinstance(text, str):
-                raise TypeError(f"texts[{i}] must be str, got {type(text).__name__}")
-            if not text.strip():
-                raise ValueError(f"texts[{i}] is empty")
-            if len(text) > MAX_TEXT_CHARS:
-                raise ValueError(f"texts[{i}] has {len(text)} chars; ceiling is {MAX_TEXT_CHARS}")
-        if kind not in KINDS:
-            raise ValueError(f"kind must be one of {KINDS}")
-        if not isinstance(instruction, str) or not instruction.strip():
-            raise ValueError("instruction must be a non-empty str")
-
+        texts = self._validate(texts, kind, instruction)
         formatted = [format_query(t, instruction) if kind == "query" else t for t in texts]
         pooled, n_tokens = self._runner(formatted)
         pooled = np.asarray(pooled, dtype=np.float32)
