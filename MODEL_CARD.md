@@ -3,6 +3,8 @@ license: apache-2.0
 model_card_spec: "1.1"
 pipeline_tag: feature-extraction
 base_model: Qwen/Qwen3-Embedding-0.6B
+date_published: "2025-06-03"
+date_published_source: "Hugging Face Hub repository creation date of the exact hosted checkpoint (`createdAt`, https://huggingface.co/api/models/Qwen/Qwen3-Embedding-0.6B)"
 ---
 
 # Qwen3-Embedding-0.6B (DIMER package v0.1.0) — Text Embedding Model (Encoder)
@@ -11,7 +13,6 @@ base_model: Qwen/Qwen3-Embedding-0.6B
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-QwenLM%2FQwen3--Embedding-181717?style=flat&logo=github&logoColor=white)](https://github.com/QwenLM/Qwen3-Embedding)
 [![arXiv Paper](https://img.shields.io/badge/arXiv-2506.05176-b31b1b.svg)](https://arxiv.org/abs/2506.05176)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Pipeline](https://img.shields.io/badge/Pipeline-qwen3--embedding--pipeline-2ea44f?style=flat&logo=github)](https://github.com/kurtvalcorza/qwen3-embedding-pipeline)
 
 > [!WARNING]
 > ⚠️ **Provided for research, training, and evaluation purposes only.** Model weights are redistributed unmodified under their upstream license, which controls your use, including any commercial use or redistribution; the accompanying code and notebooks are released under this repository's license. All of it is supplied **"as is"**, without warranty of any kind, and has not been validated for production, clinical, or safety-critical use. Running the notebooks downloads third-party weights and datasets governed by their own licenses and consumes compute on your own Colab/Kaggle account. To the maximum extent permitted by law, the maintainers of this repository and the DIMER platform accept no liability for any damages arising from their use. Hosting implies no affiliation with or endorsement by the original authors.
@@ -28,7 +29,7 @@ This pipeline provides a ready-to-run interactive Google Colab notebook that exe
 
 ---
 
-###### Description
+#### Description
 
 `Qwen/Qwen3-Embedding-0.6B` is the smallest of the Qwen3 Embedding series (Zhang et al., arXiv:2506.05176), pinned here to revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`. The upstream README states it is built on `Qwen/Qwen3-0.6B-Base`; the pinned `config.json` is a `Qwen3ForCausalLM` decoder with 28 layers, hidden size 1024, 16 attention heads over 8 key-value heads, and a 32,768-token position budget. Used as an embedder, the decoder runs one forward pass over the text and the hidden state at the last token position is taken as the sentence vector (`1_Pooling/config.json`: `pooling_mode_lasttoken: true`), then L2-normalised; queries are prefixed with a task instruction, documents are not. Nothing is trained, fine-tuned, or conditioned in this repository. What it adds is the `Qwen3EmbeddingPipeline` class in `src/qwen3_embedding_pipeline/pipeline.py`: manifest verification (`verify_snapshot`), fresh-clone staging (`stage_missing_files`), a loader that refuses remote code and mutable caches, input validation with named ceilings, the README's exact prefix/pooling/normalisation contract, and provenance fields in every result.
 
