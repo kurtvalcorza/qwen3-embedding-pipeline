@@ -2,6 +2,7 @@
 license: apache-2.0
 model_card_spec: "1.1"
 pipeline_tag: feature-extraction
+task: "Others - Text Embedding"
 base_model: Qwen/Qwen3-Embedding-0.6B
 date_published: "2025-06-03"
 date_published_source: "Hugging Face Hub repository creation date of the exact hosted checkpoint (`createdAt`, https://huggingface.co/api/models/Qwen/Qwen3-Embedding-0.6B)"
