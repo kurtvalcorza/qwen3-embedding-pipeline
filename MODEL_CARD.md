@@ -127,7 +127,7 @@ The pipeline must not be used to profile individuals from the text they write, t
 
 ## Runtime
 
-- Pins (`pyproject.toml`): `torch==2.14.0`, `transformers==4.57.6`, `huggingface-hub==0.36.2`, `safetensors==0.8.0`, `numpy==2.5.3`; dev `pytest==8.4.2`, `ruff==0.16.6`. Python 3.12, Windows venv `dimer-next16`.
+- Pins (`pyproject.toml`): `torch==2.14.0`, `torchvision==0.29.0`, `torchaudio==2.11.0`, `transformers==4.57.6`, `huggingface-hub==0.36.2`, `safetensors==0.8.0`, `numpy==2.5.3`; dev `pytest==8.4.2`, `ruff==0.16.6`. Python 3.12, Windows venv `dimer-next16`.
 - Executed 2026-09-12: `CUDA_VISIBLE_DEVICES=-1 python -m pytest -q -o addopts= tests` — 19 passed, exit 0; `ruff check src tests` clean.
 - Smoke, executed on CPU (`CUDA_VISIBLE_DEVICES=-1`, `from_pretrained(device="cpu")`, float32): two README queries embedded with `kind="query"` and the two README documents with `kind="document"`; load 6.63 s, embedding 0.437 s, 7.06 s total; `dim` 1024, `n_tokens` [27, 23, 8, 31], no truncation, vector norm 1.0; cosine matrix [[0.7646, 0.1414], [0.1355, 0.6000]], equal to the upstream README's printed values to four decimals.
 - Not executed: the CUDA/bfloat16 path, the `allow_download=True` Hub path, inputs near the 8,192-token ceiling against the real model, and any labelled retrieval evaluation.
