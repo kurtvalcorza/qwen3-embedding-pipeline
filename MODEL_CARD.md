@@ -7,7 +7,7 @@ date_published: "2025-06-03"
 date_published_source: "Hugging Face Hub repository creation date of the exact hosted checkpoint (`createdAt`, https://huggingface.co/api/models/Qwen/Qwen3-Embedding-0.6B)"
 ---
 
-# Qwen3-Embedding-0.6B (DIMER package v0.1.0) — Text Embedding Model (Encoder)
+# Qwen3-Embedding-0.6B — Text Embedding Model (Encoder)
 
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Qwen%2FQwen3--Embedding--0.6B-ffcc4d?style=flat)](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-QwenLM%2FQwen3--Embedding-181717?style=flat&logo=github&logoColor=white)](https://github.com/QwenLM/Qwen3-Embedding)
