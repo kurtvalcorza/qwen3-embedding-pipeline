@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,32 @@ MAX_BATCH = 64  # texts per embed() call
 DEFAULT_QUERY_INSTRUCTION = "Given a web search query, retrieve relevant passages that answer the query"
 POOLING = "last_token"
 KINDS = ("query", "document")
+WEIGHT_FILE = "model.safetensors"
+WEIGHT_SHA256 = (
+    "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd"  # manifest digest of WEIGHT_FILE
+)
+PARAMETER_COUNT = 595_776_512  # Qwen3Model (no LM head)
+DECODER_LAYERS = 28  # config.json num_hidden_layers
+DEFAULT_TRAINABLE_LAYERS = 2  # the last two decoder layers (31,461,888 parameters)
+MAX_TRAIN_TOKENS = (
+    64  # training-only truncation of queries and documents (inference truncates at MAX_TEXT_TOKENS)
+)
+DEFAULT_TEMPERATURE = 0.05
+MAX_EVAL_RECORDS = 2_000
+MAX_DOCUMENTS = 1_000
+MIN_SCORED_RECORDS = 50  # below this a scored dataset is labelled a small sample
+ARTIFACT_FORMAT = "org.valcorza.qwen3-embedding-0.6b.adapter.v1"
+ARTIFACT_FORMAT_VERSION = "1.0"
+ARTIFACT_WEIGHTS_NAME = "adapter.safetensors"
+ARTIFACT_MANIFEST_NAME = "manifest.json"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def verify_snapshot(path: str | Path | None = None) -> dict[str, Any]:
@@ -203,11 +231,7 @@ def evaluation_report(
         "reason": (
             "the output is a representation, not a prediction: the pipeline exposes no performance "
             "metric, only the cosine_similarity comparison helper"
-            + (
-                "; labels were supplied but no metric helper exists to score them here"
-                if supplied
-                else ""
-            )
+            + ("; labels were supplied but no metric helper exists to score them here" if supplied else "")
         ),
         "needs": (
             "a downstream labelled task: for retrieval, a query-document set with relevance "
@@ -225,6 +249,9 @@ class Qwen3EmbeddingPipeline:
 
     _runner: Callable[[list[str]], tuple[np.ndarray, list[int]]]
     device: str
+    adapter: dict[str, Any] | None = field(default=None, repr=False)
+    _model: Any = field(default=None, repr=False)
+    _tokenizer: Any = field(default=None, repr=False)
 
     @classmethod
     def from_pretrained(
@@ -245,6 +272,7 @@ class Qwen3EmbeddingPipeline:
         # Refuse invalid snapshots before importing model libraries.
         import torch
         from transformers import AutoModel, AutoTokenizer
+
         resolved_device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
         dtype = torch.bfloat16 if resolved_device.startswith("cuda") else torch.float32
         tokenizer = AutoTokenizer.from_pretrained(
@@ -264,7 +292,7 @@ class Qwen3EmbeddingPipeline:
             counts = batch["attention_mask"].sum(dim=1).tolist()
             return pooled.float().cpu().numpy(), [int(c) for c in counts]
 
-        return cls(runner, resolved_device)
+        return cls(runner, resolved_device, _model=model, _tokenizer=tokenizer)
 
     def _validate(self, texts: Any, kind: str, instruction: str) -> list[str]:
         return _check_inputs(texts, kind, instruction)
@@ -295,3 +323,325 @@ class Qwen3EmbeddingPipeline:
             "model_id": MODEL_ID,
             "model_revision": MODEL_REVISION,
         }
+
+    # ---- adaptation -----------------------------------------------------------------------------------
+
+    def _require_model(self) -> tuple[Any, Any]:
+        if self._model is None or self._tokenizer is None:
+            raise ValueError(
+                "this operation needs a pipeline built with from_pretrained() or from_artifact()"
+            )
+        return self._model, self._tokenizer
+
+    def _embed_all(self, texts: Sequence[str], kind: str, instruction: str) -> np.ndarray:
+        """Embed any number of texts through the public contract, MAX_BATCH at a time."""
+        rows = []
+        for start in range(0, len(texts), MAX_BATCH):
+            rows.extend(
+                self.embed(list(texts[start : start + MAX_BATCH]), kind=kind, instruction=instruction)[
+                    "embeddings"
+                ]
+            )
+        return np.asarray(rows, dtype=np.float32)
+
+    def evaluate(
+        self,
+        records: Sequence[Mapping[str, Any]],
+        *,
+        instruction: str = DEFAULT_QUERY_INSTRUCTION,
+        candidates: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """Retrieval over the dataset's document set: every query (embedded with `instruction`) is ranked
+        against every document by cosine and the rank of its own positive is read (recall@k, MRR)."""
+        from .metrics import rank_of_positive, retrieval_metrics
+        from .samples import documents, validate_dataset
+
+        checked = validate_dataset(records, min_records=1, max_records=MAX_EVAL_RECORDS)["records"]
+        docs = list(candidates) if candidates is not None else documents(checked)
+        if not 2 <= len(docs) <= MAX_DOCUMENTS:
+            raise ValueError(f"the document set must hold 2..{MAX_DOCUMENTS} documents; got {len(docs)}")
+        index = {doc: i for i, doc in enumerate(docs)}
+        missing = [r["positive"] for r in checked if r["positive"] not in index]
+        if missing:
+            raise ValueError(f"positive {missing[0]!r} is not in the document set")
+        started = time.perf_counter()
+        doc_vectors = self._embed_all(docs, "document", instruction)
+        query_vectors = self._embed_all([r["query"] for r in checked], "query", instruction)
+        scores = query_vectors @ doc_vectors.T
+        ranks = [
+            rank_of_positive(row.tolist(), index[r["positive"]])
+            for row, r in zip(scores, checked, strict=True)
+        ]
+        metrics = retrieval_metrics(ranks, len(docs))
+        metrics.update(
+            {
+                "instruction": instruction,
+                "verdict": "measured" if len(checked) >= MIN_SCORED_RECORDS else "measured-small-sample",
+                "adapted": self.adapter is not None,
+                "seconds": round(time.perf_counter() - started, 3),
+                "model_id": MODEL_ID,
+                "model_revision": MODEL_REVISION,
+            }
+        )
+        return metrics
+
+    @staticmethod
+    def lexical_baseline(
+        records: Sequence[Mapping[str, Any]], candidates: Sequence[str] | None = None
+    ) -> dict[str, Any]:
+        """The no-model floor: documents ranked by token overlap with the query (see metrics.py)."""
+        from .metrics import lexical_baseline
+        from .samples import documents, validate_dataset
+
+        checked = validate_dataset(records, min_records=1, max_records=MAX_EVAL_RECORDS)["records"]
+        return lexical_baseline(checked, list(candidates) if candidates is not None else documents(checked))
+
+    def _trainable_names(self, trainable_layers: int) -> list[str]:
+        if not isinstance(trainable_layers, int) or not 1 <= trainable_layers <= DECODER_LAYERS:
+            raise ValueError(f"trainable_layers must be an int in 1..{DECODER_LAYERS}")
+        model, _ = self._require_model()
+        first = DECODER_LAYERS - trainable_layers
+        prefixes = tuple(f"layers.{k}." for k in range(first, DECODER_LAYERS))
+        return [name for name, _p in model.named_parameters() if name.startswith(prefixes)]
+
+    def adapt(
+        self,
+        train: Sequence[Mapping[str, Any]],
+        val: Sequence[Mapping[str, Any]] | None = None,
+        *,
+        instruction: str = DEFAULT_QUERY_INSTRUCTION,
+        epochs: int = 2,
+        lr: float = 5e-5,
+        batch_size: int = 16,
+        trainable_layers: int = DEFAULT_TRAINABLE_LAYERS,
+        temperature: float = DEFAULT_TEMPERATURE,
+        seed: int = 0,
+        progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> dict[str, Any]:
+        """Bounded contrastive fine-tuning on validated query–positive pairs.
+
+        Only the last `trainable_layers` decoder layers train (2 by default; the token embeddings, the
+        earlier layers and the final norm stay frozen). Each batch embeds its queries (formatted with
+        `instruction`) and the unique documents among its positives (plus any explicit negatives) in one
+        forward pass; the loss is the InfoNCE cross-entropy of every query over that batch's documents at
+        `temperature` — the other queries' positives are the negatives — with AdamW at a fixed learning rate,
+        gradient clipping at 1.0, seeded shuffling and no scheduler; texts are truncated to MAX_TRAIN_TOKENS
+        **during training only**. Epoch 0 records the frozen model's validation retrieval metrics against
+        the validation document set; the epoch with the highest validation MRR is kept."""
+        from .samples import documents, validate_dataset
+
+        if not isinstance(epochs, int) or not 1 <= epochs <= 20:
+            raise ValueError("epochs must be an int in 1..20")
+        if not (0.0 < lr <= 1e-3):
+            raise ValueError("lr must be in (0, 1e-3]")
+        if not isinstance(batch_size, int) or not 2 <= batch_size <= 64:
+            raise ValueError("batch_size must be an int in 2..64")
+        if not (0.0 < temperature <= 1.0):
+            raise ValueError("temperature must be in (0, 1]")
+        _check_inputs(["x"], "query", instruction)
+        names = self._trainable_names(trainable_layers)
+        train_checked = validate_dataset(train)["records"]
+        val_checked = (
+            validate_dataset(val, min_records=1, max_records=MAX_EVAL_RECORDS)["records"] if val else []
+        )
+        val_docs = documents(val_checked) if val_checked else []
+        import torch
+
+        torch.manual_seed(seed)
+        model, tokenizer = self._require_model()
+        started = time.perf_counter()
+        wanted = set(names)
+        for name, param in model.named_parameters():
+            param.requires_grad_(name in wanted)
+        params = [p for p in model.parameters() if p.requires_grad]
+        n_trainable = sum(p.numel() for p in params)
+        optimiser = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
+        device = torch.device(self.device)
+
+        def score_val() -> dict[str, Any] | None:
+            if not val_checked:
+                return None
+            model.eval()
+            keep = ("recall@1", "recall@5", "recall@10", "mrr", "n_documents")
+            return {
+                k: v
+                for k, v in self.evaluate(val_checked, instruction=instruction, candidates=val_docs).items()
+                if k in keep
+            }
+
+        def encode(texts: list[str]) -> torch.Tensor:
+            batch = tokenizer(
+                texts, padding=True, truncation=True, max_length=MAX_TRAIN_TOKENS, return_tensors="pt"
+            )
+            hidden = model(**batch.to(device)).last_hidden_state[:, -1]
+            return torch.nn.functional.normalize(hidden.float(), dim=-1)
+
+        history: list[dict[str, Any]] = []
+        entry: dict[str, Any] = {"epoch": 0, "train_loss": None, "val": score_val(), "note": "frozen model"}
+        history.append(entry)
+        if progress:
+            progress(entry)
+        best_mrr = entry["val"]["mrr"] if entry["val"] else -math.inf
+        best_state = {k: v.detach().clone() for k, v in model.state_dict().items() if k in wanted}
+        best_epoch = 0
+        generator = torch.Generator().manual_seed(seed)
+        for epoch in range(1, epochs + 1):
+            model.train()
+            order = torch.randperm(len(train_checked), generator=generator).tolist()
+            losses = []
+            for start in range(0, len(order), batch_size):
+                batch = [train_checked[i] for i in order[start : start + batch_size]]
+                if len(batch) < 2:
+                    continue
+                docs = documents(batch)
+                targets = torch.tensor(
+                    [docs.index(r["positive"]) for r in batch], dtype=torch.long, device=device
+                )
+                queries = encode([format_query(r["query"], instruction) for r in batch])
+                candidates = encode(docs)
+                logits = queries @ candidates.T / temperature
+                loss = torch.nn.functional.cross_entropy(logits, targets)
+                optimiser.zero_grad(set_to_none=True)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(params, 1.0)
+                optimiser.step()
+                losses.append(float(loss.detach()))
+            model.eval()
+            entry = {"epoch": epoch, "train_loss": sum(losses) / max(len(losses), 1), "val": score_val()}
+            history.append(entry)
+            if progress:
+                progress(entry)
+            current = entry["val"]["mrr"] if entry["val"] else math.inf
+            if current > best_mrr or not entry["val"]:
+                best_mrr = current
+                best_state = {k: v.detach().clone() for k, v in model.state_dict().items() if k in wanted}
+                best_epoch = epoch
+        merged = dict(model.state_dict())
+        merged.update(best_state)
+        model.load_state_dict(merged, strict=True)
+        model.eval()
+        for param in model.parameters():
+            param.requires_grad_(False)
+        self.adapter = {
+            "objective": "InfoNCE over in-batch documents (contrastive)",
+            "instruction": instruction,
+            "trainable_layers": trainable_layers,
+            "trainable_names": names,
+            "n_trainable": n_trainable,
+            "n_total": sum(p.numel() for p in model.parameters()),
+            "epochs": epochs,
+            "best_epoch": best_epoch,
+            "selection": "highest validation MRR" if val_checked else "final epoch (no validation split)",
+            "lr": lr,
+            "batch_size": batch_size,
+            "temperature": temperature,
+            "max_train_tokens": MAX_TRAIN_TOKENS,
+            "n_train": len(train_checked),
+            "n_train_documents": len(documents(train_checked)),
+            "n_val": len(val_checked),
+            "seed": seed,
+            "history": history,
+            "seconds": round(time.perf_counter() - started, 2),
+        }
+        return dict(self.adapter)
+
+    # ---- artifacts ------------------------------------------------------------------------------------
+
+    def save_artifact(self, output_dir: str | Path, metadata: Mapping[str, Any] | None = None) -> Path:
+        """Write the adapted decoder-layer tensors as safetensors with a manifest naming the base."""
+        if self.adapter is None:
+            raise ValueError("nothing to save: call adapt() first")
+        model, _ = self._require_model()
+        from safetensors.torch import save_file
+
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        names = set(self.adapter["trainable_names"])
+        tensors = {k: v.detach().cpu().contiguous() for k, v in model.state_dict().items() if k in names}
+        weights_path = out / ARTIFACT_WEIGHTS_NAME
+        save_file(tensors, str(weights_path), metadata={"format": "pt"})
+        manifest = {
+            "format": ARTIFACT_FORMAT,
+            "format_version": ARTIFACT_FORMAT_VERSION,
+            "base_model": {
+                "id": MODEL_ID,
+                "revision": MODEL_REVISION,
+                "key": MODEL_KEY,
+                "weight_file": WEIGHT_FILE,
+                "weight_sha256": WEIGHT_SHA256,
+            },
+            "adapter": {k: v for k, v in self.adapter.items() if k not in ("history", "trainable_names")},
+            "history": self.adapter["history"],
+            "tensors": sorted(tensors),
+            "files": [
+                {
+                    "path": ARTIFACT_WEIGHTS_NAME,
+                    "bytes": weights_path.stat().st_size,
+                    "sha256": _sha256(weights_path),
+                }
+            ],
+            "metadata": dict(metadata or {}),
+        }
+        (out / ARTIFACT_MANIFEST_NAME).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        return out
+
+    def load_artifact(self, artifact_dir: str | Path) -> dict[str, Any]:
+        """Verify an adapter's manifest and digest, then overwrite exactly the tensors it carries."""
+        root = Path(artifact_dir)
+        manifest = json.loads((root / ARTIFACT_MANIFEST_NAME).read_text(encoding="utf-8"))
+        if manifest.get("format") != ARTIFACT_FORMAT:
+            raise ValueError(f"artifact format {manifest.get('format')!r} != {ARTIFACT_FORMAT!r}")
+        base = manifest.get("base_model", {})
+        if (base.get("id"), base.get("revision"), base.get("weight_sha256")) != (
+            MODEL_ID,
+            MODEL_REVISION,
+            WEIGHT_SHA256,
+        ):
+            raise ValueError("artifact was adapted from a different base model, revision or weight file")
+        entry = manifest["files"][0]
+        weights_path = root / entry["path"]
+        if not weights_path.is_file():
+            raise FileNotFoundError(f"artifact weights missing: {weights_path}")
+        if _sha256(weights_path) != entry["sha256"] or weights_path.stat().st_size != entry["bytes"]:
+            raise ValueError(f"{entry['path']}: digest or size mismatch; refusing to load")
+        model, _ = self._require_model()
+        from safetensors.torch import load_file
+
+        tensors = load_file(str(weights_path))
+        if sorted(tensors) != manifest["tensors"]:
+            raise ValueError("artifact tensor names differ from its manifest")
+        state = model.state_dict()
+        for key, value in tensors.items():
+            if key not in state or not key.startswith("layers."):
+                raise ValueError(
+                    f"artifact tensor {key} is not an adaptable decoder-layer tensor of the base"
+                )
+            if tuple(value.shape) != tuple(state[key].shape):
+                raise ValueError(
+                    f"artifact tensor {key}: shape {tuple(value.shape)} != {tuple(state[key].shape)}"
+                )
+        merged = dict(state)
+        merged.update({k: v.to(state[k].dtype) for k, v in tensors.items()})
+        model.load_state_dict(merged, strict=True)
+        model.eval()
+        self.adapter = {
+            **manifest["adapter"],
+            "trainable_names": manifest["tensors"],
+            "history": manifest.get("history", []),
+        }
+        return manifest
+
+    @classmethod
+    def from_artifact(
+        cls,
+        artifact_dir: str | Path,
+        *,
+        device: str | None = None,
+        weights_dir: str | Path | None = None,
+        allow_download: bool = False,
+    ) -> Qwen3EmbeddingPipeline:
+        pipeline = cls.from_pretrained(device=device, weights_dir=weights_dir, allow_download=allow_download)
+        pipeline.load_artifact(artifact_dir)
+        return pipeline

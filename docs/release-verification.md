@@ -1,124 +1,160 @@
 # Release verification
 
-`tutorials/qwen3_embedding_colab.ipynb` (`TASK-INFERENCE`) is a **release candidate** until
-the exact notebook revision has executed top-to-bottom in a clean supported runtime. Unit tests,
-JSON validation, code-cell compilation, and `tools/validate_release_assets.py` are necessary
-checks but are **not** runtime evidence under DIMER Notebook Specification 1.1. This file is
-the durable release-gate record for the notebook.
+`tutorials/qwen3_embedding_colab.ipynb` (`E2E`, **standalone** carrier) is a **release candidate** until the
+exact notebook revision has executed top-to-bottom in a clean supported runtime. Unit tests, JSON validation,
+code-cell compilation, the generator parity checks and `tools/validate_release_assets.py` are necessary checks but
+are **not** runtime evidence under DIMER Notebook Specification 2.0 (REL8). This file is the durable release-gate
+record for the notebook.
 
 ## Automatic coverage (static, every pull request)
 
 CI runs `tools/validate_release_assets.py`, which checks:
 
-- notebook JSON parses; every code cell compiles as plain Python (no `%`/`!` magics); no
-  persisted outputs or execution counts; no unresolved placeholder markers; every code cell
-  is preceded by an explanatory markdown cell;
-- exactly one tutorial notebook, named in `tutorials/README.md` with its `TASK-INFERENCE`
-  profile, the notebook-spec version and the standalone carrier; `metadata.dimer` declares that profile, spec `1.1`, `standalone: true` and `generated_from` (repository, revision, module SHA-256, generator);
-- the standalone carrier (ST1–ST6, PAR1–PAR3): no clone, repository install or repository import on the
-  primary path; exactly one cell tagged `embedded_module` equal to `src/qwen3_embedding_pipeline/pipeline.py`
-  after the generator's documented rewrites; the inline `MANIFEST` equal to the committed snapshot manifest and the
-  inline `PINS` equal to the `pyproject.toml` runtime pins; the notebook byte-identical to `tools/build_notebook.py`
-  output; the pinned-install cell with its restart-on-stale-import guard; `NOTEBOOK_SOURCE` recorded in exports;
-- `MODEL_ID`/`MODEL_REVISION` are bound only in the carried module cell (and repeated in the inline manifest,
-  which the notebook asserts against the module before fetching), the revision is a 40-hex immutable commit, and the
-  same identity string appears in `README.md`, `MODEL_CARD.md`, and `docs/WEIGHTS.md` with no stray revisions;
+- notebook JSON parses; every code cell compiles as plain Python (no `%`/`!` magics); no persisted outputs or
+  execution counts; no unresolved placeholder markers; every code cell is preceded by an explanatory markdown cell;
+- exactly one tutorial notebook, named in `tutorials/README.md` with its `E2E` profile, the notebook-spec version
+  and the standalone carrier; `metadata.dimer` declares that profile, spec `2.0`, a §3.3 pedagogical mode,
+  `standalone: true` and `generated_from` (repository, revision, module SHA-256, generator);
+- the standalone carrier (ST1–ST8, PAR1–PAR4): no clone, repository install or repository import on the primary
+  path; one cell per carried module (`pipeline.py`, `samples.py`, `metrics.py`), each equal to its source after the
+  generator's documented rewrites; the inline `MANIFEST` equal to the committed 11-entry snapshot manifest and the
+  inline `PINS` equal to the `pyproject.toml` runtime pins; the notebook byte-identical (on LF) to
+  `tools/build_notebook.py` output for its recorded revision; the pinned-install cell with its
+  restart-on-stale-import guard; `NOTEBOOK_SOURCE` recorded in exports;
+- `MODEL_ID`/`MODEL_REVISION` bound only in the carried module cell (and repeated in the inline manifest, which the
+  notebook asserts against the module before fetching), the revision a 40-hex immutable commit, and the same
+  identity string in `README.md`, `MODEL_CARD.md` and `docs/WEIGHTS.md` with no stray revisions (the pinned Banking77
+  commit is the one allowed second hash);
 - the profile-specific public-API calls (`stage_missing_files`, `verify_snapshot`,
-  `Qwen3EmbeddingPipeline.from_pretrained(weights_dir=...)`, `validate_inputs`, `embed(queries, kind='query', instruction=...)`,
-  `embed(documents, kind='document')`, `cosine_similarity`, `evaluation_report`), the ceiling print
-  (`MAX_BATCH`, `MAX_TEXT_TOKENS`, `MAX_TEXT_CHARS`, `EMBEDDING_DIM`), the four exports, the learner-facing statements
-  (representations not predictions, shape/pooling/normalisation/unit, no intrinsic metric, precision by device,
-  capability exclusions) and the gated-off BYOD default listed in the validator; forbidden patterns
-  (credential-in-URL, any `git clone` / `github.com` / repository import on the primary path, a mutable
-  `revision='main'`, direct `from transformers import` / `AutoModel` / `AutoTokenizer` / `SentenceTransformer(` /
-  `from huggingface_hub import` use **outside the carried module cell**, `trust_remote_code=True`, `pickle.load`,
-  `torch.load(`, `extractall(`);
-- `STATUS.md`, `README.md` and `tutorials/README.md` agree on one release-status token and no
-  document makes an unsupported release-grade, production-readiness or benchmark claim;
-- `MODEL_CARD.md` front matter (`model_card_spec: "1.1"`), single H1, required heading order, and
-  immutable provenance.
+  `Qwen3EmbeddingPipeline.from_pretrained(weights_dir=...)`, `fetch_corpus` from the pinned cache path,
+  `read_corpus` + `build_sample_dataset(seed=SPLIT_SEED)` / `load_byod_dataset`, `validate_dataset` per split,
+  `check_split_disjoint`, `write_dataset_csv`, `documents`, `validate_inputs` with the oversized-batch refusal probe, `pipe.embed` on queries and documents
+  with the sanity checks plus the frozen top-3 lists, `random_floor`, `pipe.lexical_baseline`, `pipe.evaluate` on
+  the frozen model with the floor assertion and on the validation and test splits after adaptation with the MRR
+  assertion, `pipe.adapt` with its explicit hyperparameters, `trainable_layers=TRAINABLE_LAYERS`,
+  `temperature=TEMPERATURE` and `instruction=INSTRUCTION`, the per-batch `evaluation_report`,
+  `pipe.save_artifact`, `Qwen3EmbeddingPipeline.from_artifact` and the reload-parity assertion, and the provenance fields `weight_format`, `weight_sha256` and the `corpus` block), the six expected
+  `outputs/` paths, the learner-facing statements (representations not predictions, adaptation measured by retrieval, the
+  random floor, the lexical baseline, cosine is a similarity not a probability, InfoNCE, no dispersion estimate,
+  every vector changes, named exclusions, the CC BY 4.0 corpus licence) and the gated-off BYOD
+  default; forbidden patterns (credential-in-URL, any `git clone` / `github.com` / repository import on the primary
+  path, a mutable `revision='main'`, direct `from transformers import` / `AutoModel` / `AutoTokenizer` /
+  `last_hidden_state` / `from huggingface_hub import` / `urllib.request` / `safetensors` / `torch.optim` /
+  `.backward(` / `pipe._model` / `cross_entropy(` use **outside the carried module cells**, `trust_remote_code=True`,
+  `pickle.load`, `torch.load(` without `weights_only=True`, `extractall(`);
+- `STATUS.md`, `README.md` and `tutorials/README.md` agree on one release-status token and no document makes an
+  unsupported release-grade, production-readiness or benchmark claim;
+- `MODEL_CARD.md` front matter (`model_card_spec: "1.1"`), single H1, the 19 required headings in order, and the
+  immutable provenance section.
 
-CI also installs the pinned CPU-only torch wheels plus `transformers`, `huggingface-hub`, `safetensors` and `numpy`, runs
-`ruff`, `tools/build_notebook.py --check`, and the offline unit suite (`tests/test_pipeline.py`,
-`tests/test_role_helpers.py`, `tests/test_notebook_parity.py`; injected runner, no weights). These are
-source/provenance and unit checks. They are **not** execution evidence.
+CI installs only `pytest`, `ruff` and `numpy` plus the package without its model dependencies (no torch, no
+transformers), runs `ruff check src tests tools`, `tools/build_notebook.py --check`, and the offline unit suite
+(`tests/test_pipeline.py`, `tests/test_adaptation.py`, `tests/test_role_helpers.py`, `tests/test_import_boundary.py`,
+`tests/test_notebook_parity.py`; injected runner, tokenizer, scorer and corpus fetcher, temporary manifests, no weights
+— `tests/test_model_backed.py` is skipped without `transformers` and the snapshot). These are source/provenance and unit
+checks. They are **not** execution evidence.
 
 ## Executor paths
 
 | Path | Runtime | Role |
 |---|---|---|
-| Google Colab (supported user path) | Colab CPU runtime (CUDA used automatically when present) | The runtime the tutorial is written for; a clean top-to-bottom run here is promotion evidence |
-| Kaggle CLI kernel | Kaggle CPU kernel, Python 3.12 image | Reproducible clean-room executor of the same class; the notebook is pushed verbatim plus one leading shim cell that provides `google.colab` and chdirs to a scratch directory (no repository checkout is needed — the notebook is standalone) |
-| Local Windows-venv harness (pre-flight only) | Workstation, sequential cell executor with a `google.colab` shim, `CUDA_VISIBLE_DEVICES=-1` | Builder pre-flight to catch defects before spending cloud runs; **not** a supported runtime and not promotion evidence |
+| Google Colab (supported user path) | Colab CPU runtime (CUDA used automatically when present; bfloat16 there, float32 on CPU) | The runtime the tutorial is written for; a clean top-to-bottom run here is promotion evidence |
+| Kaggle CLI kernel or equivalent fresh container | Fresh CPU or GPU container, Python 3.12 image; the committed notebook executed verbatim in a fresh interpreter with a `google.colab` shim and **no repository checkout** (the notebook is standalone) | Reproducible clean-room executor of the same class; needed whenever the hosted kernel pre-imports a NumPy or torch that differs from the `pyproject.toml` pins, because the tutorial's fail-closed stale-import guard correctly halts the in-kernel path after the pinned install |
+| Local harness (pre-flight only) | Workstation, sequential cell executor with a `google.colab` shim, pre-staged pins, `CUDA_VISIBLE_DEVICES=-1` | Builder pre-flight to catch defects before spending cloud runs; **not** a supported runtime and **not** promotion evidence |
 
 ## Supported release verification procedure
 
 Before changing the registry status from `Candidate` to `Release-grade`:
 
 1. resolve the exact PR/commit head under review and confirm static CI is green;
-2. open that exact notebook revision in a new CPU (or CUDA) runtime (Colab, or the Kaggle
-   executor above) with **no repository checkout** and a clean model cache;
-3. run the notebook top-to-bottom without editing implementation cells (form parameters at their
-   defaults for the sample path: `USE_BYOD = False`);
+2. open that exact notebook revision in a new CPU or CUDA runtime (Colab, or a fresh-container executor above) with
+   **no repository checkout**, an empty Hugging Face cache, and no pre-staged files under the working-directory
+   snapshot `weights/qwen3-embedding-0.6b/` or the corpus cache `weights/banking77/` (the standalone path writes the
+   manifest itself, stages the missing file from the Hub, and fetches the two pinned Banking77 files from the project
+   repository, so neither directory may be seeded);
+3. run the notebook top-to-bottom without editing implementation cells (form parameters at their defaults:
+   `USE_BYOD = False`, `SPLIT_SEED = 42`, `INSTRUCTION = 'Given a customer support message, retrieve the banking intent
+   it expresses'`, `EPOCHS = 2`, `LEARNING_RATE = 5e-5`, `BATCH_SIZE = 16`, `TRAINABLE_LAYERS = 2`,
+   `TEMPERATURE = 0.05`);
 4. verify that Section 1 reports `NOTEBOOK_SOURCE.repository_revision` equal to the revision recorded in
    `metadata.dimer.generated_from` and that the installed core package versions equal the inline `PINS`
-   (= `pyproject.toml`);
+   (= `pyproject.toml`): `torch==2.14.0`, `transformers==4.57.6`, `huggingface-hub==0.36.2`, `safetensors==0.8.0`,
+   `numpy==2.5.3` (an interpreter restart after the install is expected where the runtime's preinstalled torch or
+   numpy differ from the pins);
 5. verify every default-path stage completes:
    - pinned runtime installed from the inline `PINS` with no GitHub access;
-   - the carried module cell executes (defines `Qwen3EmbeddingPipeline`, `validate_inputs`, `evaluation_report`,
-     `cosine_similarity` and the ceilings) with no import of the repository package;
-   - the four upstream-README sentences prepared as `q1`, `q2`, `d1`, `d2` with their character counts, corpus
-     SHA-256 and the query instruction printed, and the ceilings (`MAX_BATCH` 64, `MAX_TEXT_TOKENS` 8192,
-     `MAX_TEXT_CHARS` 100000, `EMBEDDING_DIM` 1024) surfaced;
-   - pinned `Qwen/Qwen3-Embedding-0.6B` acquisition at the immutable revision through the carried module:
-     the inline `MANIFEST` is asserted against the module identity and written to `weights/qwen3-embedding-0.6b/`,
-     `stage_missing_files(WEIGHTS_DIR, allow_download=True)` reports the manifest entries absent on a clean runtime,
-     `verify_snapshot` returns its dict, and `from_pretrained(weights_dir=WEIGHTS_DIR)` loads from the verified directory;
-   - `validate_inputs` writes `outputs/qwen3_embedding_input_manifest.json` (verdict `accepted`, the query half under
-     `query_manifest`, one recorded rejection finding from the oversized-batch probe);
-   - `embed` returning `(2, 1024)` query and `(2, 1024)` document arrays with unit norms, `pooling == 'last_token'`,
-     `normalized == True`, no truncation, and the cosine table by identifier (the card-pass CPU smoke gave
-     `[[0.7646, 0.1414], [0.1355, 0.6000]]`, equal to the upstream README; a materially different table is a finding to
-     record, not a failure by itself, because no metric is asserted);
-   - `evaluation_report` writes `outputs/qwen3_embedding_evaluation_report.json` with verdict `not-measurable` and an
-     empty `metrics` list — the correct verdict for a representation, stated as such;
-   - `outputs/qwen3_embedding_result.json` and `outputs/qwen3_embedding_vectors.csv` written with `NOTEBOOK_SOURCE`,
-     model revision, model licence, runtime versions and device;
+   - the three carried module cells execute (defining `Qwen3EmbeddingPipeline`, `verify_snapshot`,
+     `stage_missing_files`, `validate_inputs`, `evaluation_report`, `cosine_similarity`, `fetch_corpus`,
+     `read_corpus`, `build_sample_dataset`, `filter_records`, `validate_dataset`, `documents`,
+     `check_split_disjoint`, `split_dataset`, `load_byod_dataset`, `write_dataset_csv`, `retrieval_metrics`,
+     `random_floor`, `lexical_baseline` and the ceilings) with no import of the repository package;
+   - the inline manifest asserted against the module's constants, then `stage_missing_files(WEIGHTS_DIR,
+     allow_download=True)` reporting `['model.safetensors']` (and any other absent entry) fetched from
+     `Qwen/Qwen3-Embedding-0.6B` at the immutable revision, and `verify_snapshot` returning its dict (11 files);
+     `from_pretrained(weights_dir=WEIGHTS_DIR)` loading from the verified directory;
+   - Section 4: `fetch_corpus` fetching the two pinned files (839,073 / 239,961 bytes) from `raw.githubusercontent.com`
+     into `weights/banking77/`, 10,003 + 3,080 raw rows read, and the seeded balanced draw of 616 / 154 / 385 pairs
+     over 77 intents with `check_split_disjoint` reporting no shared message, 77 documents, and the three dataset
+     digests `__DIG_TRAIN__` / `__DIG_VAL__` / `__DIG_TEST__`; `outputs/…_train.csv` written; the four dataset refusal
+     probes each raising `ValueError`;
+   - Section 5: the ceilings (`MAX_BATCH` 64, `MAX_TEXT_TOKENS` 8192, `MAX_TEXT_CHARS` 100000, `EMBEDDING_DIM` 1024,
+     `MAX_TRAIN_TOKENS` 64) surfaced; `validate_inputs` writing `outputs/…_input_manifest.json` (verdict `accepted`, the
+     query manifest with the instruction, one recorded rejection finding from the oversized-batch probe); `embed` on
+     the 77 documents and three test queries with all five sanity checks `True` and the frozen top-3 lists printed;
+   - Section 6: the random floor (recall@1 1.3 %, MRR ≈ 0.064), the lexical baseline (≈ 30.6 % recall@1 on the
+     sample) and the frozen embedder's test metrics (≈ 63.4 % recall@1, MRR ≈ 0.742) on CPU float32,
+     with the cell's assertion that the document counts agree and the frozen MRR is above the floor;
+   - Section 7: `pipe.adapt` printing epoch 0 as the frozen model, 31,461,888 trainable of 595,776,512 parameters,
+     77 training documents, and a two-epoch history with validation MRR rising (0.699 → 0.812 → 0.828 in the recorded run;
+     `best_epoch` 2);
+   - Section 8: `pipe.evaluate` on the validation and test splits with the four-way comparison and
+     `outputs/…_evaluation_report.json` written (the cell asserts the adapted test MRR exceeds the frozen one — on the
+     sample recall@1 ≈ 80.3 % versus ≈ 63.4 %);
+   - Section 9: the three test queries retrieved again by the adapted embedder and printed beside the frozen top-3 and
+     the gold intent, each document's cosine to its frozen self summarised, the per-batch `evaluation_report` verdict
+     `not-measurable`, `outputs/…_retrieval.csv` written; `pipe.save_artifact` writing
+     `outputs/…_adapter/{adapter.safetensors, manifest.json}` (22 tensors, about 126 MB, `instruction`
+     recorded) and `Qwen3EmbeddingPipeline.from_artifact` reloading it with identical query vectors and an identical
+     77-query MRR (the cell asserts both); `outputs/…_result.json` written with `NOTEBOOK_SOURCE`, the model identity
+     and licence, the snapshot block (`weight_format`, `weight_sha256`), the instruction, the `corpus` block, the
+     inference-contract items, the comparison, the before/after retrievals, the document shift, the artifact digest,
+     the reload parity, the runtime versions and device;
 6. verify the exports exist and the interpretation section matches the observed path;
-7. record the notebook Git blob id, commit, runtime (platform, Python, PyTorch, Transformers, precision, device),
-   model identifier and immutable revision, whether the model cache was clean, outcome, produced
-   outputs, and any warning or applicable `SHOULD` deviation in the table below;
+7. record the notebook Git blob id, commit, runtime (platform, Python, PyTorch, Transformers, device), the model
+   identifier and immutable revision, whether the model cache, the weights directory and the corpus cache were clean,
+   outcome, produced outputs, the observed metrics (as observations, not a benchmark) and any warning or applicable
+   `SHOULD` deviation in the tables below;
 8. record no access tokens or other secrets.
 
-A known-failing default path in the supported runtime blocks release.
+A known-failing default path in the supported runtime blocks release (REL11).
+
+## Manual clean-runtime evidence
+
+| Notebook | Commit / notebook blob | Date (UTC) | Executor | Outcome |
+|---|---|---|---|---|
+| `qwen3_embedding_colab.ipynb` (`E2E`) | `__LOCAL_ROW__` | 2026-09-19 | Local pre-flight harness (Windows, CPython 3.12.10, CPU, `google.colab` shim, pins pre-installed) | PASS — pre-flight only, **not** promotion evidence |
+| `qwen3_embedding_colab.ipynb` (`TASK-INFERENCE`, superseded) | `cbeec85` / `7715612eea32` | 2026-09-14 | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | PASSED — 8/8 code cells, 234.2 s, 1,207 MB staged; evidence for the earlier inference-only notebook, not for the `E2E` blob |
 
 ## Recorded executions
 
 Notebook identity is the Git blob id of `tutorials/qwen3_embedding_colab.ipynb` (verify with
-`git rev-parse <commit>:tutorials/qwen3_embedding_colab.ipynb`). Wall times, when recorded,
-are the sum of per-cell times reported by the executor and include installs and the model download;
-they are measurements for the stated runtime, not general estimates.
-
-### Manual clean-runtime evidence
+`git rev-parse <commit>:tutorials/qwen3_embedding_colab.ipynb`). Wall times are the sum of per-cell times reported by
+the executor and include the model download where it occurred; they are measurements for the stated runtime, not
+general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
-| 2026-09-14 | `cbeec85` / `7715612eea32` | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | Default sample path | 234.2 s | **PASSED** — 8/8 ok code cells executed cleanly, 24 files, 1207 MB staged |
+| 2026-09-19 | `__LOCAL_ROW__` | Local pre-flight harness (Windows, CPython 3.12.10, CPU float32, `torch 2.14.0+cu130` with `CUDA_VISIBLE_DEVICES=-1`, `transformers 4.57.6`) | `__LOCAL_EXEC__` |
+| 2026-09-14 | `cbeec85` / `7715612eea32` (`TASK-INFERENCE`, superseded) | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | Default sample path of the inference-only notebook: the four README sentences, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot` over 11 files, query/document embedding with the cosine check, `not-measurable` report, CSV + JSON exports | 234.2 s | **PASSED** — 8/8 code cells, 1,207 MB staged; history only |
 
 ## Current status
 
-No clean-runtime execution of the notebook has been recorded yet; the run is **pending** and queued
-to the GPU lane. Static validation (`tools/validate_release_assets.py`), nbformat validation, a
-`compile()` sweep over every code cell, and the offline unit suite passed on the tutorial source at
-the candidate revision, which is necessary but not sufficient. The registry status remains
-**Candidate** until a reviewer confirms a recorded run against the notebook blob under review and
-an integrator promotes it; promotion is not performed by the builder. Facts a reviewer should weigh:
-`stage_missing_files` was exercised only with an injected downloader in the unit suite (the real
-`hf_hub_download` fetch into the snapshot directory has not been executed); the card pass executed
-`embed` only on CPU in the Windows venv (returns/L3: CUDA/bfloat16 path not executed); and **the
-standalone carrier itself — executing the carried module cell in a runtime that has no repository
-checkout — has been validated statically only (parity PASS) and never run end-to-end.** A carrier
-probe did exec the install, carried-module and identity-assert cells in a fresh interpreter with the
-repository package blocked on `sys.meta_path`, which confirms the cells define the public API without
-the package; it fetched nothing and loaded no model. The clean run will therefore be the first
-execution of the standalone path and of the staging path.
+The `E2E` notebook source is complete and passes all static checks, including the generator parity checks
+(`--check` OK). A local pre-flight execution of the committed blob completed the whole default path on CPU — corpus
+read from the cache, validation and split, the embedding contract, the random floor, the lexical baseline and the
+frozen retrieval metrics, two epochs of contrastive fine-tuning, held-out evaluation, before/after retrievals, adapter
+export and reload parity — which catches defects but is **not** a supported runtime under REL1/REL10, and it ran with
+the snapshot and the two Banking77 files pre-staged, so neither the 1.19 GB Hub fetch nor the corpus download has been
+exercised by this notebook end to end; the earlier `TASK-INFERENCE` Kaggle run did exercise the Hub fetch and digest
+check of the same snapshot. The repository stays at **Candidate** until a Colab or fresh-container run of the exact
+`E2E` release revision is recorded above.
