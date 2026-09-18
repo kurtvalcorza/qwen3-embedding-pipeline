@@ -47,12 +47,12 @@ CI runs `tools/validate_release_assets.py`, which checks:
 - `MODEL_CARD.md` front matter (`model_card_spec: "1.1"`), single H1, the 19 required headings in order, and the
   immutable provenance section.
 
-CI installs only `pytest`, `ruff` and `numpy` plus the package without its model dependencies (no torch, no
-transformers), runs `ruff check src tests tools`, `tools/build_notebook.py --check`, and the offline unit suite
+CI also installs the pinned CPU-only torch wheel plus `transformers`, `huggingface-hub`, `safetensors` and `numpy`,
+runs `ruff check src tests tools`, `tools/build_notebook.py --check`, and the offline unit suite
 (`tests/test_pipeline.py`, `tests/test_adaptation.py`, `tests/test_role_helpers.py`, `tests/test_import_boundary.py`,
-`tests/test_notebook_parity.py`; injected runner, tokenizer, scorer and corpus fetcher, temporary manifests, no weights
-— `tests/test_model_backed.py` is skipped without `transformers` and the snapshot). These are source/provenance and unit
-checks. They are **not** execution evidence.
+`tests/test_notebook_parity.py`; injected bag-of-words runner and corpus fetcher, temporary manifests, no weights —
+`tests/test_model_backed.py` is skipped without the snapshot). These are source/provenance and unit checks. They are
+**not** execution evidence.
 
 ## Executor paths
 
