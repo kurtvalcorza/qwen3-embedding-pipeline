@@ -308,6 +308,8 @@ def test_evaluate_ranks_through_the_public_embed_contract(forbid_model_imports):
         pipe.evaluate(records[:12], candidates=["a", "b"])
     with pytest.raises(ValueError, match="2..1000"):
         pipe.evaluate(records[:12], candidates=["only"])
+    with pytest.raises(ValueError, match="duplicate candidate"):
+        pipe.evaluate(records[:12], candidates=[*documents(records), documents(records)[0]])
     with pytest.raises(ValueError, match="instruction"):
         pipe.evaluate(records[:12], instruction="  ")
 

@@ -360,6 +360,9 @@ class Qwen3EmbeddingPipeline:
         docs = list(candidates) if candidates is not None else documents(checked)
         if not 2 <= len(docs) <= MAX_DOCUMENTS:
             raise ValueError(f"the document set must hold 2..{MAX_DOCUMENTS} documents; got {len(docs)}")
+        if len(set(docs)) != len(docs):
+            duplicate = next(d for d in docs if docs.count(d) > 1)
+            raise ValueError(f"the document set holds a duplicate candidate: {duplicate[:60]!r}")
         index = {doc: i for i, doc in enumerate(docs)}
         missing = [r["positive"] for r in checked if r["positive"] not in index]
         if missing:
