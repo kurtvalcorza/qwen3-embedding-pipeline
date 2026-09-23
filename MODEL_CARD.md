@@ -108,7 +108,7 @@ This pipeline is not intended for decisions in health, safety, criminal justice,
 
 ###### Use cases
 
-The pipeline must not be used to profile individuals from the text they write, to infer protected characteristics from embeddings, for surveillance or social scoring, or for unlawful discrimination in employment, housing, credit, insurance, education, or healthcare access — including ranking people by similarity to a prototype in any of those settings. It must not be used to de-anonymise authors, to build indexes over text obtained without authorisation, or in any way that breaches the Apache-2.0 terms of the upstream weights or the DIMER deployment terms. These prohibitions hold even where the model would produce a plausible ranking.
+The pipeline must not be used to profile individuals from the text they write, to infer protected characteristics from embeddings, for surveillance or social scoring, or for unlawful discrimination in employment, housing, credit, insurance, education, or healthcare access — including ranking people by similarity to a prototype in any of those settings. It must not be used to de-anonymise authors, to build indexes over text obtained without authorisation, or in any way that breaches the Apache-2.0 terms of the upstream weights or the terms of the deployment that runs the pipeline. These prohibitions hold even where the model would produce a plausible ranking.
 
 ## Immutable provenance
 
