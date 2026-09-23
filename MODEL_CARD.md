@@ -42,7 +42,7 @@ The task is text embedding: input is a list of up to `MAX_BATCH = 64` strings wi
 
 ###### Primary Intended Users
 
-Intended users are machine-learning engineers, search and data engineers, and application developers building retrieval or clustering features for research prototypes, internal enterprise search, or the DIMER model workbench. The pipeline assumes its users know that an embedding is a representation with no label attached, that cosine similarity between two vectors is only meaningful relative to other pairs from the same model, that queries and documents must be embedded with the matching `kind` (mixing them silently degrades retrieval), that text beyond 8,192 tokens is cut off, and that retrieval quality on their own corpus must be measured with their own relevance judgements before deployment.
+Intended users are machine-learning engineers, search and data engineers, and application developers building retrieval or clustering features for research prototypes or in-house search. The pipeline assumes its users know that an embedding is a representation with no label attached, that cosine similarity between two vectors is only meaningful relative to other pairs from the same model, that queries and documents must be embedded with the matching `kind` (mixing them silently degrades retrieval), that text beyond 8,192 tokens is cut off, and that retrieval quality on their own corpus must be measured with their own relevance judgements before deployment.
 
 ###### Out-of-scope use cases
 
