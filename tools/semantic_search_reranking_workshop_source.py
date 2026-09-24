@@ -1,5 +1,5 @@
+# ruff: noqa: E501,I001
 """Source cells for the DIMER semantic-search and reranking workshop."""
-# ruff: noqa: E501 -- embedded pinned package sources are intentionally carried as literals
 CELLS = [
   {
     "kind": "markdown",
