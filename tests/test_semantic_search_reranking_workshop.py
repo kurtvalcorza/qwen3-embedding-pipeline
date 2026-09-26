@@ -109,3 +109,11 @@ def test_clean_notebook():
         if cell["cell_type"] == "code":
             assert cell["execution_count"] is None
             assert cell["outputs"] == []
+
+
+def test_stale_import_guard_tells_colab_users_to_restart_not_delete():
+    # "Start a fresh runtime" read as Disconnect-and-delete on Colab, which discards the pins and repeats the error.
+    text = "\n".join("".join(c["source"]) for c in json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"])
+    assert "Restart session" in text
+    assert "Do not disconnect or delete the runtime" in text
+    assert "Start a fresh runtime" not in text
