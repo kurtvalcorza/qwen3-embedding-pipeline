@@ -1,54 +1,111 @@
 # ruff: noqa: E501,I001
-"""Static contract tests for the semantic-search/reranking workshop."""
+"""Static contract tests for the Qwen3 semantic search and reranking workshop."""
 from __future__ import annotations
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
-REPO=Path(__file__).resolve().parents[1]
-NOTEBOOK=REPO/"tutorials"/"DIMER_Semantic_Search_Reranking_Workshop.ipynb"
+from qwen3_embedding_pipeline import samples
+
+REPO = Path(__file__).resolve().parents[1]
+NOTEBOOK = REPO / "tutorials" / "DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb"
+EMBED_REVISION = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
+RERANK_REVISION = "e61197ed45024b0ed8a2d74b80b4d909f1255473"
+RERANK_WEIGHT_SHA256 = "27cd75a405b9c1b46b59abfd88aaa209e6fed2a1972cde9b70e7659537c5e65b"
+
 
 def load():
     return json.loads(NOTEBOOK.read_text(encoding="utf-8"))
 
+
 def body():
-    return "\n".join("".join(cell.get("source",[])) for cell in load()["cells"])
+    return "\n".join("".join(cell.get("source", [])) for cell in load()["cells"])
+
+
+def code_cells():
+    return ["".join(cell["source"]) for cell in load()["cells"] if cell["cell_type"] == "code"]
+
+
+def embedded_manifest(name):
+    match = re.search(name + r' = json\.loads\(r"""(.*?)"""\)', body(), re.S)
+    assert match, f"{name} not embedded"
+    return json.loads(match.group(1))
+
 
 def test_generator_parity():
-    subprocess.run([sys.executable,str(REPO/"tools"/"build_semantic_search_reranking_workshop.py"),"--check"],cwd=REPO,check=True)
+    subprocess.run([sys.executable, str(REPO / "tools" / "build_semantic_search_reranking_workshop.py"), "--check"], cwd=REPO, check=True)
+
 
 def test_metadata():
-    meta=load()["metadata"]["dimer"]
-    assert meta["notebook_spec"]=="2.1"
-    assert meta["notebook_profile"]=="TASK-INFERENCE"
-    assert meta["notebook_mode"]=="WORKSHOP"
+    meta = load()["metadata"]["dimer"]
+    assert meta["notebook_spec"] == "2.1"
+    assert meta["notebook_profile"] == "MULTI-CAPABILITY"
+    assert meta["notebook_mode"] == "WORKSHOP"
     assert meta["standalone"] is True
-    assert meta["clean_runtime_evidence"]=="pending"
+    assert meta["worker_required"] is False
+    assert meta["credentials_required"] is False
+    assert meta["clean_runtime_evidence"] == "pending"
+    assert [m["revision"] for m in meta["models"]] == [EMBED_REVISION, RERANK_REVISION]
 
-def test_two_stage_contract():
-    text=body()
+
+def test_code_cells_compile():
+    for cell in code_cells():
+        compile(cell, "cell", "exec")
+
+
+def test_embedding_manifest_matches_the_repository_snapshot():
+    committed = json.loads((REPO / "weights" / "qwen3-embedding-0.6b" / "dimer-base-manifest.json").read_text(encoding="utf-8"))
+    assert embedded_manifest("EMBED_MANIFEST") == committed
+
+
+def test_reranker_manifest_is_pinned():
+    manifest = embedded_manifest("RERANK_MANIFEST")
+    assert manifest["modelId"] == "Qwen/Qwen3-Reranker-0.6B"
+    assert manifest["revision"] == RERANK_REVISION
+    weights = next(f for f in manifest["files"] if f["path"] == "model.safetensors")
+    assert weights["sha256"] == RERANK_WEIGHT_SHA256
+    assert manifest["totalBytes"] == sum(f["bytes"] for f in manifest["files"])
+
+
+def test_dataset_pins_match_the_repository():
+    text = body()
+    assert samples.CORPUS_BASE_URL in text.replace('"\n    "', "")
+    for name, size, digest in samples.CORPUS_FILES.values():
+        assert f'("{name}", {size:_}, "{digest}")' in text
+
+
+def test_contract_present():
+    text = body()
     for literal in [
-        "Qwen/Qwen3-Embedding-0.6B",
-        "Qwen/Qwen3-Reranker-0.6B",
-        'USE_BYOD = False  # @param',
-        'BYOD_ZIP_PATH = ""  # @param',
-        "candidate_recall@k",
-        "conditional_reranker_top1",
-        "semantic_search_per_query.csv",
-        "semantic_search_provenance.json",
+        "USE_BYOD = False",
+        "RERANK_K = 6",
+        "SAMPLE_SEED = 42",
+        "RUN_K_SWEEP = False",
+        "trust_remote_code=False",
+        "local_files_only=True",
+        "YES_TOKEN_ID, NO_TOKEN_ID = 9693, 2152",
+        "shortlist_coverage@k",
+        "unrecoverable",
+        "not-measurable",
+        "document_embeddings.npz",
+        "retrieval_results.csv",
+        "reranked_results.csv",
+        "metrics.json",
+        "provenance.json",
     ]:
         assert literal in text
 
-def test_pinned_embedded_sources_no_runtime_clone():
-    text=body()
-    assert "115cf17fb35048dcadc187ac7dd36b28d99f9aab" in text
-    assert "f13a58e65a7ee54343e8fa262c166308699c4f11" in text
-    for forbidden in ["git clone ","pip install -e","dimer-backend"]:
+
+def test_no_runtime_repo_dependency():
+    text = body()
+    for forbidden in ["git clone ", "pip install -e", "raw.githubusercontent.com/kurtvalcorza", "import qwen3_embedding_pipeline", "import qwen3_reranker_pipeline", "dimer-backend"]:
         assert forbidden not in text
+
 
 def test_clean_notebook():
     for cell in load()["cells"]:
-        if cell["cell_type"]=="code":
+        if cell["cell_type"] == "code":
             assert cell["execution_count"] is None
-            assert cell["outputs"]==[]
+            assert cell["outputs"] == []
