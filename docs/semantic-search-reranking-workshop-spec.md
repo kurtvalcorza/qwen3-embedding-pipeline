@@ -1221,3 +1221,6 @@ The intended conceptual sequence is:
 *Search quality is a property of the composed system, not either model in isolation.*
 
 That system-level lesson is the core reason this notebook exists.
+## Guided and optional-path follow-up
+
+Adopt the non-breaking fleet 2.2 guided layer while retaining the 2.1 profile declaration. Optional learning uses the existing isolated depth sweep, with no test-based canonical retuning. BYOD requires either all valid labels or no labels, unloads one model before loading the other, and writes distinct rankings/results plus input/model/runtime provenance. A manual-restart bootstrap is not evidence of the uninterrupted no-interaction Run-all requirement; that qualification gap remains open.
