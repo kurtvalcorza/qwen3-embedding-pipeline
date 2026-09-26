@@ -149,6 +149,54 @@ general estimates.
 | 2026-09-19 | `9bcb449` / `40e0a136` | Local pre-flight harness (Windows, CPython 3.12.10, CPU float32, `torch 2.14.0+cu130` with `CUDA_VISIBLE_DEVICES=-1`, `transformers 4.57.6`) | Default sample path (install skipped, pins pre-installed → three carried modules → inline manifest assert → `stage_missing_files` fetched 0 of 11 entries because the snapshot was pre-staged → `verify_snapshot` 11 files → `from_pretrained` on CPU → `fetch_corpus` served from the pre-staged cache after its digest checks → 10,003 + 3,080 rows read, 616 / 154 / 385 drawn over 77 intents with `check_split_disjoint` clean, 77 documents and digests `dacba395…` / `3d07cfd5…` / `df00c83e…` → four dataset refusals → input manifest with the oversized-batch refusal → `embed` of the 77 documents (0.72 s) and three test queries (0.18 s; 30 / 48 / 36 tokens) with all five sanity checks `True` → frozen top-3 lists → random floor → lexical baseline → frozen evaluation → `adapt` → validation + test evaluation → retrievals after adaptation → adapter export → reload parity) | 226.9 s | **PASSED** — 11/11 code cells; random floor recall@1 1.3 % / MRR 0.064; lexical baseline recall@1 30.6 %, recall@5 50.4 %, MRR 0.416, median rank 5; frozen test recall@1 63.4 %, recall@5 88.6 %, recall@10 94.0 %, MRR 0.742, median rank 1 (30.7 s); `adapt` 31,461,888 of 595,776,512 params, 616 pairs over 77 documents, 2 epochs, 133.3 s, validation MRR 0.699 → 0.812 → 0.828 (recall@1 58.4 → 70.1 → 72.7 %; `best_epoch` 2, train loss 0.479 → 0.178); **adapted test recall@1 80.3 %, recall@5 97.9 %, recall@10 99.5 %, MRR 0.879 (Δ +16.9 / +9.4 / +5.5 points, +0.136 MRR)**; the three probe queries ranked their gold intent first before and after (the top-3 below the gold changed for all three); document self-cosine to the frozen vectors median 0.680, minimum 0.520; per-batch report `not-measurable`; adapter 125,849,896 B / 22 tensors, SHA-256 `ac38839e…`; reload parity exact (query vectors identical, 77-query MRR 0.859199 both ways); six exports written. Pre-flight; hosted clean-runtime run still required |
 | 2026-09-14 | `cbeec85` / `7715612eea32` (`TASK-INFERENCE`, superseded) | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | Default sample path of the inference-only notebook: the four README sentences, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot` over 11 files, query/document embedding with the cosine check, `not-measurable` report, CSV + JSON exports | 234.2 s | **PASSED** — 8/8 code cells, 1,207 MB staged; history only |
 
-## Current status
+## Primary embedding tutorial status
 
 **Release-grade.** The `E2E` notebook blob `f3475b93` (committed at `ec6dd95`) executed top-to-bottom in a clean Kaggle Tesla T4 runtime on 2026-09-19 (11/11 ok (1 restart after install cell), 323.6 s, 26 files, 1209 MB fetched from the Hub and digest-verified inside the notebook) with no repository checkout — the REL1/REL10 supported-runtime evidence this file gates on. The local pre-flight rows above are what preceded it and remain history. Any later change to the carried modules or to the notebook produces a new blob, and the registry returns to **Candidate** until a clean run of that blob is recorded here.
+
+## Qwen3 semantic search and reranking notebook — 2026-09-26 follow-up
+
+This record concerns `DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb` on PR #8, separately from the primary E2E embedding tutorial above. Assessment used fleet NOTEBOOK_SPEC 2.2 (blob `046d866eac7cc67b1539a4ba370ebc965341c87b`) and this repository's search/reranking specification. The compatible 2.1 declaration remains; the 2.2 guided recommendations do not change mandatory profile semantics.
+
+Confirmed fixes:
+
+- GDL7–12: added stage-specific predictions, expected-result guidance, worked coverage/conditional-metric checkpoints and collapsed infrastructure. Extended metric definitions for beginners.
+- GDL10: the learner activity now runs only the existing optional K-sweep, preserving canonical K/rankings/metrics. It explicitly treats the reused test queries as exploratory, requiring a separate untouched set for a tuning claim.
+- BYOD: partial labels no longer silently suppress all evaluation; mixed labels and unknown gold IDs fail before model reload.
+- BYOD: release the canonical reranker before loading the BYOD embedder, then release that embedder before reloading the reranker.
+- BYOD: persist optional rankings and results separately, with file digests, effective K, instructions, model revisions and runtime. The terminal summary checks those files when BYOD is enabled.
+
+Local baseline: release validator passed and 10/10 comparative-notebook tests passed. Revised checks: 17/17 focused tests pass, generator parity/release validator pass, and changed Python files pass Ruff. Seven added tests execute the actual notebook optional-path cells with deterministic model doubles. They cover labelled/unlabelled exports, invalid-label refusal before reload, one-model residency, preservation of canonical output, a depth-sweep example with a shortlist miss, and failed embedding load/computation followed by a successful retry. Failure cleanup clears retained model traceback frames before restoring the reranker. These checks validate control flow and metrics, **not** real checkpoint inference, GPU memory usage, or full REL12 qualification.
+
+```powershell
+$env:PYTHONPATH='src'
+python -m pytest --noconftest -o addopts= tests/test_semantic_search_reranking_workshop.py tests/test_workshop_optional_paths.py
+python tools/validate_release_assets.py
+python tools/build_semantic_search_reranking_workshop.py --check
+```
+
+### Open release gates
+
+1. **Uninterrupted fresh-runtime Run all is not established.** The current installer updates packages in the notebook kernel. When Colab has pre-imported a replaced package, it deliberately raises and asks for a manual session restart. A restart-assisted run must be labelled as such and does not close the no-interaction gate. Isolated model execution or another verified bootstrap design is still needed for hosts exhibiting this mismatch; deleting stale modules from `sys.modules` is not a safe fix.
+2. Record an exact-revision supported-runtime run, including commit/blob, package/device inventory, bootstrap/restart actions, all five canonical exports and their digests. No such run was performed for this follow-up.
+3. Run real BYOD with representative labelled documents/queries through both models and inspect both exports. Repeat with unlabelled queries and verify `not-measurable` plus rankings; reject mixed labels and unknown gold IDs before BYOD model loading. Retain input digests and run evidence. Character-valid text can exceed the token budget; assess truncation on representative data.
+4. Run the optional sweep with real models and retain its exploratory results separately from the canonical K=6 claim. Measure memory/timing rather than inferring either from test doubles.
+
+Status remains **Candidate**. The primary embedding tutorial's existing release-grade evidence is not inherited by this composed notebook. The manual-restart gate and hosted/full-model BYOD evidence prevent a gold-standard claim.
+
+
+### Colab NumPy setup failure — 2026-09-26
+
+The maintainer-supplied run stopped in setup before model execution: NumPy 2.1.3 was already loaded, while the notebook installed 2.5.3. The [failure record](execution-evidence/2026-09-26/colab-setup-failure.json) records the independently inspected error. The supplemental notebook retains an already loaded NumPy 2.x, integrating the concurrent host-preservation fix, and uses 2.1.3 as the fallback pin when NumPy is not yet loaded. The observed Colab 2.1.3 is preserved instead of replaced. Other model/runtime pins are unchanged; stale-module detection remains enabled. Declared upstream requirements permit 2.1.3 (Transformers and datasets require >=1.17; the closed-set SciPy pin requires >=2.0,<2.8).
+
+A regression executes the real setup prefix against a simulated Colab preloaded NumPy and package installer: it reproduces the original restart error before the fix and completes without a restart after it. This is setup regression evidence, not a full model/Colab rerun. A new hosted Run all is still required to discover any downstream issues. Use a fresh runtime for that rerun; the prior failed session already replaced installed packages.
+
+
+### Maintainer-supplied successful Colab run — 2026-09-26
+
+This later record supersedes the earlier default-path setup-failure status for the supplemental notebook. The maintainer supplied the [executed notebook](execution-evidence/2026-09-26/DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb) and authorized merging PR #8. The file is preserved byte-for-byte (SHA-256 `a2d8358e75f0a9c9ab9416d640977f2fb2566d45cd33aabaccc89e58338391ab`). All 19 code cells have execution counts, with 45 saved outputs and zero saved error outputs. All executable Python ASTs match commit `2ff64ec616773509159abe0aed33ec81e8a857da`, tutorial blob `5512be3076a1af0b7a7ff1e6fb0c3b939871162f`; Colab added only `# @title` comments to 18 cells. The tutorial source itself is unchanged by this evidence commit.
+
+The run uses the canonical settings: USE_BYOD=False, RUN_K_SWEEP=False, seed 42, K=6; 154 queries and 77 documents. Saved runtime inventory: Python 3.13.15, torch 2.14.0+cu130, Transformers 4.57.6, huggingface-hub 0.36.2, NumPy 2.1.3 (preloaded by host), cuda:0 and bfloat16. Setup proceeds through model loading, scoring and final export verification. Five required canonical files are reported written and checked; the external files themselves were not supplied, so their bytes/digests were not independently inspected.
+
+Saved results: lexical recall@1 0.3117; embedding recall@1 0.6104; shortlist coverage@6 0.9156; two-stage recall@1 0.6234 and MRR 0.7379. Reranking helped 29 queries, hurt 24, left 88 unchanged and could not recover 13 shortlist misses. This is evidence for the default composed retrieval run, not for optional BYOD or K-sweep paths.
+
+The supplied artifact does not independently establish runtime freshness or the absence of manual reruns/restarts; no such claim is inferred from saved execution counts. This merge records the successful run and maintainer approval without declaring all gold-standard/REL12 gates closed. Real-model BYOD and optional sweep qualification remain pending.
