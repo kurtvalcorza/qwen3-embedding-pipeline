@@ -7,6 +7,7 @@ import csv
 import gc
 import hashlib
 import json
+import math
 import statistics
 import time
 from collections import defaultdict
@@ -45,6 +46,9 @@ def setup(tmp_path, labels):
                 return np.eye(2), [1, 1]
             return np.tile([1., 0.], (len(texts), 1)), [1] * len(texts)
 
+        def token_lengths(self, texts, kind, instruction):
+            return [1] * len(texts)
+
         def __del__(self):
             live['embedding'] -= 1
 
@@ -56,21 +60,35 @@ def setup(tmp_path, labels):
         def score_all(self, pairs, instruction):
             return [1. if d == 'alpha' else 0. for _, d in pairs], [1] * len(pairs)
 
+        def token_lengths(self, pairs, instruction):
+            return [1] * len(pairs)
+
         def __del__(self):
             live['reranker'] -= 1
 
-    ns = dict(Path=Path, csv=csv, gc=gc, hashlib=hashlib, json=json, np=np,
+    ns = dict(Path=Path, csv=csv, gc=gc, hashlib=hashlib, json=json, math=math, np=np,
               statistics=statistics, torch=SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)),
               USE_BYOD=True, DOCUMENTS_PATH=str(docs), QUERIES_PATH=str(queries),
               MAX_TEXT_CHARS=100000, RERANK_K=6, EMBED_DIR='unused', RERANK_DIR='unused',
               EMBEDDING_INSTRUCTION='embed', RERANK_INSTRUCTION='rerank',
+              BYOD_EMBEDDING_INSTRUCTION='', BYOD_RERANK_INSTRUCTION='',
+              EMBED_DIM=2, EMBED_MAX_TOKENS=8192, RERANK_MAX_TOKENS=8192,
               EMBED_MODEL_REVISION='embedding-revision', RERANK_MODEL_REVISION='reranker-revision',
               RUNTIME={'test_double': True}, OUTPUT_DIR=str(tmp_path / 'outputs'),
               EmbeddingRuntime=Embedding, RerankerRuntime=Reranker, reranker=Reranker('unused'))
-    tree = ast.parse(cell(14))
-    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'metrics_from_ranks']
-    exec(compile(tree, 'notebook-metrics', 'exec'), ns)
+    load_shared_helpers(ns)
     return ns, live
+
+
+def load_shared_helpers(ns):
+    """Bind the notebook's shared metric and output-check functions (cell 14) without running the baseline."""
+    ns.setdefault('math', math)
+    ns.setdefault('np', np)
+    ns.setdefault('statistics', statistics)
+    tree = ast.parse(cell(14))
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+    exec(compile(tree, 'notebook-shared-helpers', 'exec'), ns)
+    return ns
 
 
 @pytest.mark.parametrize('labels', [['a', 'b'], ['', '']])
@@ -121,6 +139,7 @@ def test_depth_sweep_preserves_canonical_results():
               doc_id_to_index={'a': 0, 'b': 1}, time=time, defaultdict=defaultdict,
               reranker=Reranker(), RERANK_INSTRUCTION='rank', fmt_pct=lambda x: f'{x:.1%}',
               RERANK_K=6, pipeline_metrics=canonical)
+    load_shared_helpers(ns)
     exec(cell(34), ns)
     assert [row['recall@1'] for row in ns['k_sweep_results']] == [0., 1.]
     assert [row['pairs'] for row in ns['k_sweep_results']] == [1, 2]
