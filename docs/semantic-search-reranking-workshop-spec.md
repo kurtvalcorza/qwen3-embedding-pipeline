@@ -879,7 +879,8 @@ Contains:
 
 ```text
 random baseline
-lexical baseline
+lexical baseline (displayed-ranking tie policy)
+lexical ties-against-gold diagnostic and tie count
 retriever metrics
 shortlist coverage
 pipeline metrics
@@ -893,6 +894,7 @@ timings
 Contains:
 
 ```text
+notebook identity (repository, path, source, generator)
 notebook specification version
 notebook profile
 pedagogical mode
@@ -908,6 +910,8 @@ dataset file digests
 sample seed
 sample digest
 RERANK_K
+tie policy
+maximum token counts per input kind
 instructions
 Python version
 PyTorch version
@@ -918,6 +922,23 @@ runtime timings
 ```
 
 No secrets or tokens may appear in provenance.
+
+### `documents_lookup.csv` and `queries_lookup.csv`
+
+```text
+doc_id, text, intent
+query_id, query, gold_doc_id, gold_text, intent
+```
+
+These make every exported identifier readable offline without re-deriving the sample.
+
+### Metric conventions
+
+- Every system is scored on the ranking it displays and exports: descending score, exact ties keep document order
+  (reranker ties keep retrieval rank). The conservative ties-against-gold lexical figure is a named diagnostic.
+- Two-stage recall@k is computed at its literal cutoff from final ranks. A cutoff deeper than the composed top-`K`
+  list is reported as not measurable (`null`), never relabelled.
+- Conditional reranker metrics with no covered query are reported as not applicable, not raised as an error.
 
 ---
 
