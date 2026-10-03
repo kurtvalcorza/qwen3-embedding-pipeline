@@ -111,19 +111,20 @@ def test_clean_notebook():
             assert cell["outputs"] == []
 
 
-def test_stale_import_guard_tells_colab_users_to_restart_not_delete():
-    # "Start a fresh runtime" read as Disconnect-and-delete on Colab, which discards the pins and repeats the error.
-    text = "\n".join("".join(c["source"]) for c in json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"])
-    assert "Restart session" in text
-    assert "Do not disconnect or delete the runtime" in text
-    assert "Start a fresh runtime" not in text
+def test_setup_needs_no_restart_and_never_tells_users_to_restart():
+    # Updated 2026-10-03: the in-kernel install and its "Restart session" guard were replaced by the uv isolated
+    # environment, so no restart instruction may remain in the setup text or code.
+    cells = json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"]
+    setup_md, setup = "".join(cells[5]["source"]), "".join(cells[6]["source"])
+    assert "Restart session" not in setup_md + setup
+    assert "Start a fresh runtime" not in body()
+    assert "never asks for one" in setup_md
 
 
-def test_install_keeps_a_numpy_the_kernel_already_loaded():
-    # Colab imports NumPy at startup; reinstalling it left 2.1.3 in memory over 2.5.3 on disk, which broke later
-    # imports (Notebook Spec RUN10 forbids a manual restart). The cell keeps a loaded NumPy 2.x and fails closed
-    # if any module it depends on was replaced underneath the kernel.
+def test_install_goes_to_the_isolated_environment_not_the_kernel():
+    # Colab imports NumPy at startup; replacing it in the kernel forced a restart (Notebook Spec RUN10). The pins
+    # now install into a separate uv environment, so the kernel's NumPy is never replaced.
     cells = ["".join(c["source"]) for c in json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"] if c["cell_type"] == "code"]
-    install = next(cell for cell in cells if "pip" in cell and "install" in cell)
-    assert 'NUMPY_PRELOADED' in install and '"numpy" in sys.modules' in install
-    assert "if stale:" in install and "Restart session" in install
+    install = next(cell for cell in cells if '"pip", "install"' in cell)
+    assert "NUMPY_PRELOADED" not in install and "sys.executable" not in install
+    assert '"--python", str(ISOLATED_PYTHON)' in install
