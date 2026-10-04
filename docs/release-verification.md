@@ -145,6 +145,7 @@ general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-04 | `2996bb2` / `d72ea820` (`DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb`) | Google Colab (browser, maintainer-run), Tesla T4; kernel Python 3.13.15, uv isolated environment CPython 3.12.12 (47 locked packages), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default path only (USE_BYOD=False, RUN_K_SWEEP=False, seed 42, K=6; no toggles changed), Run all | not recorded (no per-cell timing saved; isolated setup 65 s, index 11.3 s, rerank 37.2 s) | **PASSED** — 19/19 code cells, execution counts 1..19, 0 error outputs, no restart; two-stage recall@1 0.6234, MRR 0.7379 (identical to the 2026-09-26 run of `5512be30`); [executed notebook](execution-evidence/2026-10-04/DIMER_Qwen3_Semantic_Search_Reranking_Workshop_2996bb2_colab-browser-t4.ipynb) |
 | 2026-09-19 | `ec6dd95` / `f3475b93` | Kaggle Tesla T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v3; image `torch 2.10.0+cu128` / `transformers 5.0.0` before the pinned install, `torch 2.14.0+cu130` / `transformers 4.57.6` after, Python 3.12.13, `cuda:0`) | Default sample path, `Run all` from a fresh interpreter with an empty Hugging Face cache and no repository checkout (blob SHA-1 verified against GitHub before execution) | 323.6 s | **PASSED** — 11/11 code cells ok (1 restart after install cell); 26 files, 1209 MB staged from the Hub into a clean cache; comparison {recall@1: {random_floor: 0.013, lexical: 0.3065, frozen: 0.6312, adapted: 0.7662}, recall@5: {random_floor: 0.0649, lexical: 0.5039, frozen: 0.8857, adapted: 0.9714}, recall@10: {random_floor: 0.1299, lexical: 0.6753, frozen: 0.9377, adapted: 0.9896}, mrr: {random_floor: 0.064, lexical: 0.4159, frozen: 0.741, adapted: 0.8498}, median_rank: {lexical: 5, frozen: 1, adapted: 1}, delta_vs_frozen: {recall@1: 0.1351, recall@5: 0.0857, recall@10: 0.0519, mrr: 0.1087}}; reload parity {query_vectors_identical: True, mrr_in_memory: 0.8125, mrr_reloaded: 0.8125}; run summary and executed notebook archived under `.agent/backups/kaggle-e2e-2026-09-19/out/dimer-nb2-qwen3-embedding/v3/evidence/` in the workspace |
 | 2026-09-19 | `9bcb449` / `40e0a136` | Local pre-flight harness (Windows, CPython 3.12.10, CPU float32, `torch 2.14.0+cu130` with `CUDA_VISIBLE_DEVICES=-1`, `transformers 4.57.6`) | Default sample path (install skipped, pins pre-installed → three carried modules → inline manifest assert → `stage_missing_files` fetched 0 of 11 entries because the snapshot was pre-staged → `verify_snapshot` 11 files → `from_pretrained` on CPU → `fetch_corpus` served from the pre-staged cache after its digest checks → 10,003 + 3,080 rows read, 616 / 154 / 385 drawn over 77 intents with `check_split_disjoint` clean, 77 documents and digests `dacba395…` / `3d07cfd5…` / `df00c83e…` → four dataset refusals → input manifest with the oversized-batch refusal → `embed` of the 77 documents (0.72 s) and three test queries (0.18 s; 30 / 48 / 36 tokens) with all five sanity checks `True` → frozen top-3 lists → random floor → lexical baseline → frozen evaluation → `adapt` → validation + test evaluation → retrievals after adaptation → adapter export → reload parity) | 226.9 s | **PASSED** — 11/11 code cells; random floor recall@1 1.3 % / MRR 0.064; lexical baseline recall@1 30.6 %, recall@5 50.4 %, MRR 0.416, median rank 5; frozen test recall@1 63.4 %, recall@5 88.6 %, recall@10 94.0 %, MRR 0.742, median rank 1 (30.7 s); `adapt` 31,461,888 of 595,776,512 params, 616 pairs over 77 documents, 2 epochs, 133.3 s, validation MRR 0.699 → 0.812 → 0.828 (recall@1 58.4 → 70.1 → 72.7 %; `best_epoch` 2, train loss 0.479 → 0.178); **adapted test recall@1 80.3 %, recall@5 97.9 %, recall@10 99.5 %, MRR 0.879 (Δ +16.9 / +9.4 / +5.5 points, +0.136 MRR)**; the three probe queries ranked their gold intent first before and after (the top-3 below the gold changed for all three); document self-cosine to the frozen vectors median 0.680, minimum 0.520; per-batch report `not-measurable`; adapter 125,849,896 B / 22 tensors, SHA-256 `ac38839e…`; reload parity exact (query vectors identical, 77-query MRR 0.859199 both ways); six exports written. Pre-flight; hosted clean-runtime run still required |
 | 2026-09-14 | `cbeec85` / `7715612eea32` (`TASK-INFERENCE`, superseded) | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | Default sample path of the inference-only notebook: the four README sentences, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot` over 11 files, query/document embedding with the cosine check, `not-measurable` report, CSV + JSON exports | 234.2 s | **PASSED** — 8/8 code cells, 1,207 MB staged; history only |
@@ -200,3 +201,46 @@ The run uses the canonical settings: USE_BYOD=False, RUN_K_SWEEP=False, seed 42,
 Saved results: lexical recall@1 0.3117; embedding recall@1 0.6104; shortlist coverage@6 0.9156; two-stage recall@1 0.6234 and MRR 0.7379. Reranking helped 29 queries, hurt 24, left 88 unchanged and could not recover 13 shortlist misses. This is evidence for the default composed retrieval run, not for optional BYOD or K-sweep paths.
 
 The supplied artifact does not independently establish runtime freshness or the absence of manual reruns/restarts; no such claim is inferred from saved execution counts. This merge records the successful run and maintainer approval without declaring all gold-standard/REL12 gates closed. Real-model BYOD and optional sweep qualification remain pending.
+
+
+### 2026-10-03 uv isolated environment
+
+The setup cell of `DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb` no longer installs into the notebook kernel. It downloads a size- and SHA-256-pinned `uv` 0.12.15 wheel, creates a managed CPython 3.12.12 environment, installs `tutorials/requirements-semantic-search-workshop.lock.txt` into it with `--require-hashes --only-binary :all:`, and runs every later code cell in one persistent worker process there. The restart guard is gone. The direct pins are unchanged (torch 2.14.0, torchvision 0.29.0, torchaudio 2.11.0, Transformers 4.57.6, huggingface-hub 0.36.2, safetensors 0.8.0, NumPy 2.1.3); the 2026-09-26 run's kernel Python was 3.13.15, while the isolated environment uses 3.12.12. The notebook now needs a Linux x86_64 runtime. This addresses open release gate 1 above in design only.
+
+Tutorial blob `99a726dcb8bd92f4a5ff0dd5fbc190b6a070629f` (origin/main `8c87fc6`) → `d72ea820c305724b27971eac6aff11a04e07f158`. No hosted run of the old blob `99a726dc` is recorded here; the latest recorded hosted run is the 2026-09-26 maintainer-supplied Colab run of blob `5512be30`, whose default results remain the reference. Local checks (pytest, Ruff, the release validator, both generator `--check`s, and the real worker process on Linux CPython 3.12 with a stand-in interpreter) are not clean-runtime evidence. A hosted re-run of the new blob is pending. Status: **Candidate**.
+
+
+### Maintainer-supplied Colab execution of blob `d72ea820` — 2026-10-04
+
+- **File.** [executed notebook](execution-evidence/2026-10-04/DIMER_Qwen3_Semantic_Search_Reranking_Workshop_2996bb2_colab-browser-t4.ipynb), preserved byte-for-byte, SHA-256 `5c87a5f9b68792e0b95bded386bd9555e3431ce942042806cbf5b5d23cf42c7f`.
+- **Source match.** All 47 cells have the same ids and order as the notebook at PR #10 head `2996bb2` (blob `d72ea820c305724b27971eac6aff11a04e07f158`), with zero source differences, including no `# @param` or `# @title` edits.
+- **Executor.** Google Colab (browser, maintainer-run), Tesla T4 (`gpuType` T4). The kernel ran Python 3.13.15. The uv isolated environment built in 65 s: CPython 3.12.12, 47 locked packages, `torch 2.14.0+cu130`, Transformers 4.57.6, huggingface-hub 0.36.2 and NumPy 2.1.3 (pinned install), on `cuda:0` in bfloat16. No session restart was needed.
+- **Execution.** 19/19 code cells ran, with execution counts 1..19 in order and 0 error outputs. Total wall time is not recorded because the saved file has no per-cell timing. Peak GPU memory is not printed by this notebook.
+- **Results.** These match the 2026-09-26 run of blob `5512be30`:
+
+  | Metric | 2026-09-26 | 2026-10-04 |
+  |---|---|---|
+  | Embedding recall@1 / MRR | 0.6104 / 0.7310 | 0.6104 / 0.7310 |
+  | Shortlist coverage@6 | 0.9156 | 0.9156 |
+  | Two-stage recall@1 / MRR | 0.6234 / 0.7379 | 0.6234 / 0.7379 |
+  | Helped / hurt / unchanged / unrecoverable | 29 / 24 / 88 / 13 | 29 / 24 / 88 / 13 |
+  | Lexical recall@1 (ties against gold) | 0.3117 | 0.3117 (diagnostic row) |
+  | Lexical recall@1 (displayed ranking) | — | 0.3506 |
+
+  The case-study cosine and rerank scores are also identical to 4 decimal places.
+- **Why the outputs differ from the 2026-09-26 run.** Every difference traces to a source change between `5512be30` and `d72ea820`.
+  - From `7f8b28a` (QSR-01/02, blob `99a726dc`, never hosted-run):
+    - The lexical baseline now uses the displayed-ranking tie policy (0.3506). The former figure is kept as the named diagnostic row (0.3117, unchanged), plus a tie count of 93/154.
+    - Gold and candidate phrases are printed, along with the gold-rank and first-stage-rank lines.
+    - Two lookup CSVs are exported, so 7 required files instead of 5.
+  - From `2996bb2` (uv move): the environment printout changed, and the in-kernel install and Hub progress/token-warning output is gone.
+  - The remaining differences are timings only.
+- **Evidence boundary.** This covers the default path only. BYOD and the optional K-sweep were not run, so they are not assessed in this run. The run closes open release gate 1 (an uninterrupted Run all with no restart) for the default path on Colab T4. The output files themselves were not supplied, so their bytes were not inspected.
+
+| Journey | Verdict |
+|---|---|
+| Default Run all (isolated env, no restart) | PASS |
+| Optional K-sweep | not assessed in this run |
+| BYOD | not assessed in this run |
+
+Status stays **Candidate**. Gates 3 and 4 above (real-model BYOD and the optional sweep) remain open.
