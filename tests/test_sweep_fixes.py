@@ -164,7 +164,7 @@ def _m(r1: float, mrr: float) -> dict:
 def test_swp_a_section_6_records_frozen_vs_floor_and_keeps_the_contract_check(notebook):
     source = _cell(notebook, "frozen_vs_floor = ")
     snippet = source[source.index("# Contract integrity: both systems ranked the same document set.") :]
-    namespace = {"frozen_test": _m(0.01, 0.05), "baseline_lexical": _m(0.3, 0.4), "floor": _m(0.013, 0.064)}
+    namespace = {"frozen_test": _m(0.01, 0.05), "baseline_lexical": _m(0.3, 0.4), "floor": _m(0.013, 0.064), "USE_BYOD": True}
     exec(compile(snippet, "<section 6 verdict>", "exec"), namespace)
     assert namespace["frozen_vs_floor"] == "not above"
     namespace["baseline_lexical"] = {**_m(0.3, 0.4), "n_documents": 70}
@@ -178,7 +178,8 @@ def test_swp_a_section_8_records_the_verdict_and_writes_the_report(notebook, tmp
     monkeypatch.chdir(tmp_path)
     (tmp_path / "outputs").mkdir()
     namespace = {
-        "json": json, "pipe": types.SimpleNamespace(evaluate=lambda records, **kw: _m(0.7, adapted_mrr)), "test_records": [], "val_records": [],
+        "json": json, "pipe": types.SimpleNamespace(adapter={}, evaluate=lambda records, **kw: _m(0.7, adapted_mrr)), "test_records": [], "val_records": [],
+        "USE_BYOD": True, "DEFAULT_SETTINGS": True, "near_duplicates": {"near_duplicates": {}},
         "documents": lambda records: [], "document_set": ["d"] * 77, "INSTRUCTION": "i", "floor": _m(0.013, 0.064), "baseline_lexical": _m(0.3, 0.4),
         "frozen_test": _m(0.63, 0.741), "frozen_vs_floor": "above", "MODEL_ID": "m", "MODEL_REVISION": "r", "MODEL_KEY": "k", "data_source": "stand-in",
         "dataset_manifests": {}, "disjoint": {}, "adapt_result": {"history": [], "best_epoch": 0}, "adapt_seconds": 0.0,

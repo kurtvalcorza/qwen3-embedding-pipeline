@@ -221,10 +221,10 @@ def test_validate_dataset_reports_and_rejects(forbid_model_imports):
 
 def test_split_dataset_deduplicates_and_is_seeded(forbid_model_imports):
     records = [*_records(), {**_records()[0], "id": "dup"}]
-    splits = split_dataset(records, val_fraction=0.1, test_fraction=0.2, seed=3)
+    splits = split_dataset(records, val_fraction=0.15, test_fraction=0.2, seed=3)
     assert sum(len(v) for v in splits.values()) == 12 and len(splits["test"]) == 2
     assert check_split_disjoint(splits)
-    assert split_dataset(records, val_fraction=0.1, test_fraction=0.2, seed=3) == splits
+    assert split_dataset(records, val_fraction=0.15, test_fraction=0.2, seed=3) == splits
     with pytest.raises(ValueError, match="fractions"):
         split_dataset(records, val_fraction=0.5, test_fraction=0.6)
     with pytest.raises(ValueError, match="at least"):
