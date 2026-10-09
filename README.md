@@ -64,7 +64,7 @@ Tests are offline: they use an injected fake runner and temporary manifests, nev
 
 ## Release status
 
-**Candidate** — the `E2E` notebook was regenerated on 2026-10-09 for review findings QEM-M1..M4 / QEM-m1..m4 (uv isolated environment, no restart; NOTEBOOK_SPEC 2.2), so its blob changed and a one-pass hosted run of the new blob is pending; see `docs/release-verification.md` and `STATUS.md`. The 2026-09-19 Kaggle Tesla T4 record of blob `f3475b93` needed one manual restart after the install cell and is history only. Static and unit checks — including the standalone generator parity checks — are necessary but are not the evidence; the hosted run is.
+**Candidate** — the `E2E` notebook was regenerated on 2026-10-09 for review findings QEM-M1..M4 / QEM-m1..m4 (uv isolated environment, no restart; NOTEBOOK_SPEC 2.2), so its blob changed; the review-fix blob `26a62b80` (commit `6606b82`) completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-09 (Colab CLI sequential execution, 12/12 code cells, 201.4 s; held-out recall@1 0.6312 → 0.7662, MRR 0.741 → 0.8498; reload parity exact); BYOD on a hosted runtime (REL12) is still open; see `docs/release-verification.md` and `STATUS.md`. The 2026-09-19 Kaggle Tesla T4 record of blob `f3475b93` needed one manual restart after the install cell and is history only. Static and unit checks — including the standalone generator parity checks — are necessary but are not the evidence; the hosted run is.
 
 ## Licensing
 
