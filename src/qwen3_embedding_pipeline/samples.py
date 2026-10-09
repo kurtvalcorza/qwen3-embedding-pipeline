@@ -20,6 +20,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import random
 import re
 import urllib.request
@@ -266,12 +267,24 @@ def dataset_digest(records: Sequence[Mapping[str, Any]]) -> str:
     return _sha256_bytes(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
 
+_KEY_SPLIT_RE = re.compile(r"[^0-9a-z]+")
+NEAR_DUPLICATE_JACCARD = 0.8
+
+
+def query_key(text: str) -> str:
+    """The leakage key of a query: lower-cased, with punctuation and whitespace runs collapsed, so
+    "Has my top-up been cancelled?" and "has my top up been cancelled" are the same message."""
+    return " ".join(_KEY_SPLIT_RE.split(str(text).lower())).strip()
+
+
 def check_split_disjoint(splits: Mapping[str, Sequence[Mapping[str, Any]]]) -> dict[str, Any]:
-    """Assert no lower-cased query appears in two splits (leakage check)."""
+    """Assert no query appears in two splits (leakage check): exact repeats after lower-casing and
+    collapsing punctuation and whitespace (`query_key`). Near-paraphrases are reported by
+    `near_duplicate_pairs`, not refused."""
     seen: dict[str, str] = {}
     for name, records in splits.items():
         for record in records:
-            key = str(record["query"]).lower()
+            key = query_key(record["query"])
             if key in seen and seen[key] != name:
                 raise ValueError(f"query {record['query'][:60]!r} appears in both {seen[key]} and {name}")
             seen[key] = name
@@ -288,27 +301,129 @@ def split_dataset(
     """Seeded shuffle of a BYOD dataset into train/validation/test after de-duplicating queries."""
     if not (0.0 <= val_fraction < 1.0 and 0.0 < test_fraction < 1.0 and val_fraction + test_fraction < 1.0):
         raise ValueError("fractions must satisfy 0 <= val < 1, 0 < test < 1, val + test < 1")
-    checked = validate_dataset(records)["records"]
+    checked = validate_dataset(records, min_records=1)["records"]
     seen: set[str] = set()
     unique = []
     for record in checked:
-        key = record["query"].lower()
+        key = query_key(record["query"])
         if key not in seen:
             seen.add(key)
             unique.append(record)
+    if not _split_sizes_ok(len(unique), val_fraction, test_fraction):
+        needed = min_split_records(val_fraction=val_fraction, test_fraction=test_fraction)
+        raise ValueError(
+            f"the dataset has {len(unique)} distinct queries (of {len(checked)} records); the split keeps "
+            f"{test_fraction:.0%} for test and {val_fraction:.0%} for validation (each scored over at least "
+            f"{MIN_DOCUMENTS} records) and needs {MIN_RECORDS} for training, so at least {needed} distinct "
+            "queries are required"
+        )
     random.Random(seed).shuffle(unique)
     n_test = max(1, round(len(unique) * test_fraction))
     n_val = round(len(unique) * val_fraction)
+    # Each evaluated split needs two distinct documents to rank (MIN_DOCUMENTS). When the seeded order
+    # puts a single document in one, the nearest later record with a different document is moved in.
+    _spread_documents(unique, 0, n_test)
+    _spread_documents(unique, n_test, n_val)
     splits = {
         "test": unique[:n_test],
         "validation": unique[n_test : n_test + n_val],
         "train": unique[n_test + n_val :],
     }
-    if len(splits["train"]) < MIN_RECORDS:
-        raise ValueError(
-            f"split leaves {len(splits['train'])} training records; at least {MIN_RECORDS} are required"
-        )
+    for name, part in splits.items():
+        if part and len(documents(part)) < MIN_DOCUMENTS:
+            raise ValueError(
+                f"the {name} split ({len(part)} records) holds 1 distinct document; add records so that "
+                f"at least {MIN_DOCUMENTS} distinct positives each have several queries"
+            )
     return splits
+
+
+def _split_sizes_ok(n: int, val_fraction: float, test_fraction: float) -> bool:
+    n_test = max(1, round(n * test_fraction))
+    n_val = round(n * val_fraction)
+    return (
+        n - n_test - n_val >= MIN_RECORDS
+        and n_test >= MIN_DOCUMENTS
+        and (n_val == 0 or n_val >= MIN_DOCUMENTS)
+    )
+
+
+def min_split_records(*, val_fraction: float = 0.15, test_fraction: float = 0.2) -> int:
+    """The smallest number of distinct queries `split_dataset` accepts: MIN_RECORDS left for training and
+    at least MIN_DOCUMENTS records in each evaluated split (12 at the default fractions)."""
+    for n in range(MIN_RECORDS, MAX_RECORDS + 1):
+        if _split_sizes_ok(n, val_fraction, test_fraction):
+            return n
+    raise ValueError("no dataset size satisfies these fractions")
+
+
+def _spread_documents(records: list[dict[str, Any]], start: int, size: int) -> None:
+    """Give records[start:start+size] MIN_DOCUMENTS distinct documents when a later record allows it."""
+    if size < MIN_DOCUMENTS:
+        return
+    present = set(documents(records[start : start + size]))
+    if len(present) >= MIN_DOCUMENTS:
+        return
+    for j in range(start + size, len(records)):
+        if set(documents([records[j]])) - present:
+            last = start + size - 1
+            records[last], records[j] = records[j], records[last]
+            return
+
+
+def _tokens(text: str) -> frozenset[str]:
+    return frozenset(t for t in _KEY_SPLIT_RE.split(str(text).lower()) if t)
+
+
+def near_duplicate_pairs(
+    splits: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    threshold: float = NEAR_DUPLICATE_JACCARD,
+    evaluated: Sequence[str] = ("validation", "test"),
+    max_examples: int = 5,
+) -> dict[str, Any]:
+    """Report (not refuse) each query of an evaluated split that is a near-paraphrase of a query in another
+    split: token Jaccard >= threshold. Exact repeats are already refused by `check_split_disjoint`."""
+    pool = [(name, _tokens(r["query"]), str(r["query"])) for name, records in splits.items() for r in records]
+    frequency: dict[str, int] = {}
+    for _name, toks, _query in pool:
+        for tok in toks:
+            frequency[tok] = frequency.get(tok, 0) + 1
+
+    # Prefix filtering: two token sets with Jaccard >= t share at least one of the
+    # len(a) - ceil(t * len(a)) + 1 rarest tokens of each, so only those are indexed and probed.
+    def prefix(toks: frozenset[str]) -> list[str]:
+        ordered = sorted(toks, key=lambda tok: (frequency[tok], tok))
+        return ordered[: len(ordered) - math.ceil(threshold * len(ordered)) + 1]
+
+    index: dict[str, list[int]] = {}
+    for i, (_name, toks, _query) in enumerate(pool):
+        for tok in prefix(toks):
+            index.setdefault(tok, []).append(i)
+    counts: dict[str, int] = {}
+    examples: list[dict[str, Any]] = []
+    for name in evaluated:
+        found = 0
+        for own, toks, query in pool:
+            if own != name or not toks:
+                continue
+            best = None
+            for i in sorted({i for tok in prefix(toks) for i in index.get(tok, [])}):
+                other_name, other_toks, other_query = pool[i]
+                if other_name == name:
+                    continue
+                score = len(toks & other_toks) / len(toks | other_toks)
+                if score >= threshold and (best is None or score > best[0]):
+                    best = (score, other_name, other_query)
+            if best is not None:
+                found += 1
+                if len(examples) < max_examples:
+                    examples.append(
+                        {"split": name, "query": query, "other_split": best[1], "other_query": best[2],
+                         "jaccard": round(best[0], 3)}
+                    )
+        counts[name] = found
+    return {"threshold": threshold, "near_duplicates": counts, "examples": examples}
 
 
 def load_byod_dataset(path: str | Path) -> list[dict[str, Any]]:
