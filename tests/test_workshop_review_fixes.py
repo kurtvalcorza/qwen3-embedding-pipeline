@@ -426,11 +426,21 @@ def test_comparison_prints_a_paired_view_without_changing_metrics(depth, capsys)
     exec(cell(30), ns)
     out = capsys.readouterr().out
     paired = ns["paired_comparison"]
-    final = ns["pipeline_gold_ranks"]
-    assert paired["top1_both_right"] == 1 and paired["top1_embedding_right_pipeline_wrong"] == 0
-    assert paired["top1_pipeline_right_embedding_wrong"] == 1
-    assert sum(v for k, v in paired.items() if k.startswith("top1_") and not k.endswith("_p")) == len(final)
-    assert "sign test" in out and "cannot be told apart from chance" in out and "whole pipelines" in out
+    top1, direction, mrr_k = paired["top1_correctness"], paired["covered_rank_direction"], paired["mrr_at_k"]
+    # Fixture: embedding gold ranks [1, 2, 4, 7, 9]; two-stage final ranks [1, 1, 3, 5, 8] cut at depth.
+    assert (top1["pipeline_right_embedding_wrong"], top1["embedding_right_pipeline_wrong"],
+            top1["both_right"], top1["both_wrong"]) == (1, 0, 1, 3)
+    assert top1["difference_percentage_points"] == 20.0 and top1["exact_sign_test_p"] == 1.0
+    assert (direction["helped"], direction["hurt"], direction["excluded_unrecoverable"]) == (2, 1, 1)
+    assert "diagnostic" in direction["endpoint"] and "illustrative" in top1["test"]
+    expected_at_k = sum(1 / r for r in [1, 2, 4, 7, 9] if r <= depth) / 5
+    assert ns["embedding_at_k_metrics"]["mrr"] == mrr_k["embedding_only"] == expected_at_k
+    assert mrr_k["pipeline"] == ns["pipeline_metrics"]["mrr"] and mrr_k["test"].startswith("none")
+    reference_row = ns["summary_rows"][-2]
+    assert reference_row["system"] == f"Embedding top-{depth} only" and reference_row["pool"] == depth
+    assert "percentage points" in out and "MRR over 77" in out and f"MRR@{depth}" in out
+    assert "did not provide sufficient evidence of a difference under this test" in out
+    assert "cannot be told apart" not in out and "distinguishable" not in out
     assert (dict(ns["pipeline_metrics"]), dict(ns["retriever_metrics"])) == before
 
 
@@ -469,3 +479,41 @@ def test_byod_model_failures_still_raise(tmp_path):
     ns["EmbeddingRuntime"] = Broken
     with pytest.raises(RuntimeError, match="BYOD model load failed"):
         exec(cell(38), ns)
+
+
+# Codex follow-up #5 - query texts are audited (repeats and conflicting labels), not silently assumed unique.
+def test_query_text_audit_counts_repeats_and_conflicts():
+    import ast
+    tree = ast.parse(cell(12))
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "audit_query_texts"]
+    ns = {"defaultdict": defaultdict}
+    exec(compile(tree, "cell-12-audit", "exec"), ns)
+    queries = [{"query": "Card  lost", "gold_doc_id": "a"}, {"query": "card lost", "gold_doc_id": "b"},
+               {"query": "top up", "gold_doc_id": "c"}, {"query": "TOP UP", "gold_doc_id": "c"},
+               {"query": "refund", "gold_doc_id": "d"}]
+    assert ns["audit_query_texts"](queries) == {
+        "queries": 5, "distinct_normalised_texts": 3, "repeated_texts": 2, "conflicting_label_texts": 1}
+    assert "unique query IDs" in cell(11) and "audited, not enforced" in cell(11)
+
+
+# Codex follow-up #1/#2/#6/#7/#8 and exposure wording - scoped text, labelled depths, exports, BYOD controls.
+def test_endpoint_scoped_wording_exports_and_byod_controls():
+    markdown = "\n".join(cell(i) for i in (9, 13, 29, 33, 37, 39, 42, 44))
+    retired = ("cannot be told apart", "not distinguishable", "would tend to favour",
+               "neural rows' advantage")
+    for phrase in retired:
+        assert phrase not in markdown
+    assert "could advantage either neural system" in cell(9) and "any observed neural advantage" in cell(39)
+    assert "not BM25" in cell(13) and "Jaccard" in cell(29)
+    assert "simple Jaccard word-overlap reference" in cell(44)
+    assert "MRR over 77" in cell(29) and "MRR@K" in cell(29) and "MRR over 77" in cell(44)
+    assert "did not provide sufficient evidence of a difference under this test" in cell(44)
+    assert "scores each query" in cell(33) and "illustrative" in cell(33) and "illustrative" in cell(42)
+    assert "one designated relevant document per query" in cell(37) and "development queries" in cell(37)
+    assert "Do **not** re-run the Configuration cell" in cell(37)
+    export, summary = cell(36), cell(41)
+    for key in ('"paired_comparison": paired_comparison', '"embedding_top_k_reference"', '"query_text_audit"',
+                '"metric_notes"'):
+        assert key in export
+    assert 'CANONICAL_K = pipeline_metrics["rerank_k"]' in summary
+    assert "{RERANK_K}" not in summary.split("# Your own data")[0]
