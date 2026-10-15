@@ -117,11 +117,13 @@ def test_byod_exports_labelled_or_unlabelled_results_with_one_model_resident(tmp
     (['a', ''], 'every query'),
     (['unknown'], 'unknown gold_doc_id'),
 ])
-def test_byod_invalid_labels_fail_before_model_reload(tmp_path, labels, message):
+def test_byod_invalid_labels_fail_before_model_reload(tmp_path, labels, message, capsys):
     ns, live = setup(tmp_path, labels)
     original = ns['reranker']
-    with pytest.raises(ValueError, match=message):
-        exec(cell(38), ns)
+    exec(cell(38), ns)  # QSR2-m2: a refusal is one printed message, not an exception
+    out = capsys.readouterr().out
+    assert out.startswith('BYOD input refused') and message in out and 'Traceback' not in out
+    assert ns['byod_result'] is None
     assert ns['reranker'] is original
     assert live == {'embedding': 0, 'reranker': 1}
     assert not (tmp_path / 'outputs').exists()

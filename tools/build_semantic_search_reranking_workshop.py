@@ -53,7 +53,8 @@ def build_notebook():
             "dimer":{
                 "notebook_profile":"MULTI-CAPABILITY",
                 "notebook_mode":"WORKSHOP",
-                "notebook_spec":"2.1",
+                "notebook_spec":"2.5",
+                "notebook_kind":"WORKSHOP",
                 "standalone":True,
                 "capability":"two-stage semantic search and reranking",
                 "carrier":"standalone Qwen3 embedding retrieval and cross-encoder reranking workshop",
@@ -61,7 +62,7 @@ def build_notebook():
                     {"id":"Qwen/Qwen3-Embedding-0.6B","revision":"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"},
                     {"id":"Qwen/Qwen3-Reranker-0.6B","revision":"e61197ed45024b0ed8a2d74b80b4d909f1255473"},
                 ],
-                "dataset":"Banking77 (CC BY 4.0): 77 intent documents, 154 held-out test queries",
+                "dataset":"Banking77 (CC BY 4.0): 77 intent documents, 154 official test-partition queries (not used for selection)",
                 "canonical_runtime":"NVIDIA Tesla T4",
                 "worker_required":False,
                 "credentials_required":False,

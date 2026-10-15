@@ -6,6 +6,7 @@ hosted-runtime qualification.
 """
 import json
 import math
+import re
 import statistics
 import time
 from collections import defaultdict
@@ -90,6 +91,10 @@ def comparison_namespace(depth):
         lexical_tie_diagnostic={"queries_with_gold_score_tied": 2, "fraction": 0.4},
         retriever_metrics=h["metrics_from_ranks"]([1, 2, 4, 7, 9], 77, ks=ks),
         pipeline_metrics=h["composed_metrics"](final, depth, ks=(1, 3, 6)),
+        retriever_gold_ranks=[1, 2, 4, 7, 9],
+        pipeline_gold_ranks=final,
+        effects={"helped": 2, "hurt": 1, "unchanged": 1, "unrecoverable": 1},
+        math=math,
     )
     return ns
 
@@ -276,12 +281,14 @@ def test_depth_sweep_rejects_out_of_range_scores():
     ("doc_id,text\na,alpha\nb,   \n", "line 3, column 'text'"),
     ("doc_id,text\n", "no data rows"),
 ])
-def test_byod_csv_structure_errors_name_the_location(tmp_path, content, message):
+def test_byod_csv_structure_errors_name_the_location(tmp_path, content, message, capsys):
     ns, live = setup(tmp_path, ["", ""])
     original = ns["reranker"]
     (tmp_path / "documents.csv").write_text(content, encoding="utf-8")
-    with pytest.raises(ValueError, match=message):
-        exec(cell(38), ns)
+    exec(cell(38), ns)  # QSR2-m2: refused with one printed message naming the location
+    out = capsys.readouterr().out
+    assert re.search(message, out) and "Traceback" not in out
+    assert ns["byod_result"] is None
     assert ns["reranker"] is original
     assert live == {"embedding": 0, "reranker": 1}
     assert not (tmp_path / "outputs").exists()
@@ -391,3 +398,122 @@ def test_long_inputs_get_bounded_batches():
 def test_runtimes_batch_by_attention_budget():
     assert "attention_budget_batches(lengths, EMBED_MAX_BATCH, EMBED_BATCH_ATTENTION)" in cell(16)
     assert "attention_budget_batches(lengths, RERANK_MAX_PAIRS, RERANK_BATCH_ATTENTION)" in cell(24)
+
+
+# QSR2-M1 - the embedder-vs-composed comparison is paired, with an exact two-sided sign test.
+def paired_namespace():
+    import ast
+    tree = ast.parse(cell(30))
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "exact_sign_test_p"]
+    ns = {"math": math}
+    exec(compile(tree, "cell-30-sign-test", "exec"), ns)
+    return ns
+
+
+def test_exact_sign_test_matches_the_binomial_reference():
+    p = paired_namespace()["exact_sign_test_p"]
+    # 2026-10-04 T4 run: helped 29, hurt 24 -> two-sided p = 0.5832 (binomial n=53, k<=24, doubled).
+    reference = 2 * sum(math.comb(53, i) for i in range(25)) / 2 ** 53
+    assert p(29, 24) == p(24, 29) == reference and round(reference, 2) == 0.58
+    assert p(0, 0) == 1.0 and p(3, 3) == 1.0
+    assert p(6, 0) == 2 / 2 ** 6
+
+
+@pytest.mark.parametrize("depth", [2, 6, 10])
+def test_comparison_prints_a_paired_view_without_changing_metrics(depth, capsys):
+    ns = comparison_namespace(depth)
+    before = dict(ns["pipeline_metrics"]), dict(ns["retriever_metrics"])
+    exec(cell(30), ns)
+    out = capsys.readouterr().out
+    paired = ns["paired_comparison"]
+    top1, direction, mrr_k = paired["top1_correctness"], paired["covered_rank_direction"], paired["mrr_at_k"]
+    # Fixture: embedding gold ranks [1, 2, 4, 7, 9]; two-stage final ranks [1, 1, 3, 5, 8] cut at depth.
+    assert (top1["pipeline_right_embedding_wrong"], top1["embedding_right_pipeline_wrong"],
+            top1["both_right"], top1["both_wrong"]) == (1, 0, 1, 3)
+    assert top1["difference_percentage_points"] == 20.0 and top1["exact_sign_test_p"] == 1.0
+    assert (direction["helped"], direction["hurt"], direction["excluded_unrecoverable"]) == (2, 1, 1)
+    assert "diagnostic" in direction["endpoint"] and "illustrative" in top1["test"]
+    expected_at_k = sum(1 / r for r in [1, 2, 4, 7, 9] if r <= depth) / 5
+    assert ns["embedding_at_k_metrics"]["mrr"] == mrr_k["embedding_only"] == expected_at_k
+    assert mrr_k["pipeline"] == ns["pipeline_metrics"]["mrr"] and mrr_k["test"].startswith("none")
+    reference_row = ns["summary_rows"][-2]
+    assert reference_row["system"] == f"Embedding top-{depth} only" and reference_row["pool"] == depth
+    assert "percentage points" in out and "MRR over 77" in out and f"MRR@{depth}" in out
+    assert "did not provide sufficient evidence of a difference under this test" in out
+    assert "cannot be told apart" not in out and "distinguishable" not in out
+    assert (dict(ns["pipeline_metrics"]), dict(ns["retriever_metrics"])) == before
+
+
+# QSR2-m2 - a refused BYOD attempt clears an earlier attempt's exports and prints no traceback.
+def test_byod_refusal_clears_stale_exports(tmp_path, capsys):
+    ns, live = setup(tmp_path, ["a", "b"])
+    exec(cell(38), ns)
+    out_dir = tmp_path / "outputs"
+    assert (out_dir / "byod_results.json").is_file() and (out_dir / "byod_rankings.csv").is_file()
+    capsys.readouterr()
+    (tmp_path / "queries.csv").write_text("query_id,query,gold_doc_id\nq0,alpha,zzz\n", encoding="utf-8")
+    ns["byod_result"] = None
+    exec(cell(38), ns)
+    out = capsys.readouterr().out
+    assert out.count("BYOD input refused") == 1 and "unknown gold_doc_id" in out and "Traceback" not in out
+    assert not (out_dir / "byod_results.json").exists() and not (out_dir / "byod_rankings.csv").exists()
+    assert ns["byod_result"] is None
+
+
+def test_byod_missing_file_is_a_refusal(tmp_path, capsys):
+    ns, _ = setup(tmp_path, ["a", "b"])
+    ns["DOCUMENTS_PATH"] = str(tmp_path / "absent.csv")
+    exec(cell(38), ns)
+    out = capsys.readouterr().out
+    assert "BYOD input refused" in out and "File not found" in out and ns["byod_result"] is None
+
+
+def test_byod_model_failures_still_raise(tmp_path):
+    """Only input validation is turned into a printed refusal; a model fault stays an error."""
+    ns, _ = setup(tmp_path, ["a", "b"])
+
+    class Broken:
+        def __init__(self, root):
+            raise RuntimeError("BYOD model load failed")
+
+    ns["EmbeddingRuntime"] = Broken
+    with pytest.raises(RuntimeError, match="BYOD model load failed"):
+        exec(cell(38), ns)
+
+
+# Codex follow-up #5 - query texts are audited (repeats and conflicting labels), not silently assumed unique.
+def test_query_text_audit_counts_repeats_and_conflicts():
+    import ast
+    tree = ast.parse(cell(12))
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "audit_query_texts"]
+    ns = {"defaultdict": defaultdict}
+    exec(compile(tree, "cell-12-audit", "exec"), ns)
+    queries = [{"query": "Card  lost", "gold_doc_id": "a"}, {"query": "card lost", "gold_doc_id": "b"},
+               {"query": "top up", "gold_doc_id": "c"}, {"query": "TOP UP", "gold_doc_id": "c"},
+               {"query": "refund", "gold_doc_id": "d"}]
+    assert ns["audit_query_texts"](queries) == {
+        "queries": 5, "distinct_normalised_texts": 3, "repeated_texts": 2, "conflicting_label_texts": 1}
+    assert "unique query IDs" in cell(11) and "audited, not enforced" in cell(11)
+
+
+# Codex follow-up #1/#2/#6/#7/#8 and exposure wording - scoped text, labelled depths, exports, BYOD controls.
+def test_endpoint_scoped_wording_exports_and_byod_controls():
+    markdown = "\n".join(cell(i) for i in (9, 13, 29, 33, 37, 39, 42, 44))
+    retired = ("cannot be told apart", "not distinguishable", "would tend to favour",
+               "neural rows' advantage")
+    for phrase in retired:
+        assert phrase not in markdown
+    assert "could advantage either neural system" in cell(9) and "any observed neural advantage" in cell(39)
+    assert "not BM25" in cell(13) and "Jaccard" in cell(29)
+    assert "simple Jaccard word-overlap reference" in cell(44)
+    assert "MRR over 77" in cell(29) and "MRR@K" in cell(29) and "MRR over 77" in cell(44)
+    assert "did not provide sufficient evidence of a difference under this test" in cell(44)
+    assert "scores each query" in cell(33) and "illustrative" in cell(33) and "illustrative" in cell(42)
+    assert "one designated relevant document per query" in cell(37) and "development queries" in cell(37)
+    assert "Do **not** re-run the Configuration cell" in cell(37)
+    export, summary = cell(36), cell(41)
+    for key in ('"paired_comparison": paired_comparison', '"embedding_top_k_reference"', '"query_text_audit"',
+                '"metric_notes"'):
+        assert key in export
+    assert 'CANONICAL_K = pipeline_metrics["rerank_k"]' in summary
+    assert "{RERANK_K}" not in summary.split("# Your own data")[0]

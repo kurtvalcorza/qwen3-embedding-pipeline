@@ -695,13 +695,33 @@ def validate_notebooks() -> None:
     _check("standalone" in registry.lower(), "tutorials/README.md must record that the notebook is standalone")
 
 
+WORKSHOP_NOTEBOOK_SPEC = "2.5"
+
+
+def validate_workshop_declaration() -> None:
+    """The workshop declares NOTEBOOK_SPEC 2.5 and notebook_kind WORKSHOP in metadata, opening and provenance."""
+    path = ROOT / "tutorials" / WORKSHOP_NOTEBOOK_NAME
+    notebook = json.loads(_read(path))
+    dimer = notebook.get("metadata", {}).get("dimer", {})
+    _check(dimer.get("notebook_spec") == WORKSHOP_NOTEBOOK_SPEC,
+           f"{path.name}: metadata.dimer.notebook_spec must be {WORKSHOP_NOTEBOOK_SPEC!r}")
+    _check(dimer.get("notebook_kind") == "WORKSHOP", f"{path.name}: metadata.dimer.notebook_kind must be 'WORKSHOP'")
+    cells = notebook.get("cells", [])
+    opening = _cell_source(cells[0]) if cells else ""
+    _check(f"`{WORKSHOP_NOTEBOOK_SPEC}`" in opening and "`WORKSHOP`" in opening,
+           f"{path.name}: the opening cell must name spec {WORKSHOP_NOTEBOOK_SPEC} and kind WORKSHOP")
+    stale = [i for i, cell in enumerate(cells) if re.search(r'"notebook_spec":\s*"(?!' + re.escape(WORKSHOP_NOTEBOOK_SPEC) + r'")', _cell_source(cell))]
+    _check(not stale, f"{path.name}: cells {stale} export a notebook_spec other than {WORKSHOP_NOTEBOOK_SPEC}")
+
+
 def validate_all() -> list[str]:
     validate_model_card()
     validate_identity_consistency()
     validate_weight_facts()
     validate_release_status()
     validate_notebooks()
-    return ["model-card", "identity-consistency", "weight-facts", "release-status", "notebook+parity"]
+    validate_workshop_declaration()
+    return ["model-card", "identity-consistency", "weight-facts", "release-status", "notebook+parity", "workshop-declaration"]
 
 
 def main() -> int:
