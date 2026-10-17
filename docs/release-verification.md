@@ -223,6 +223,42 @@ evaluation 72.6 s, grid 1488.3 s, selected retrain 372.1 s, adapted evaluation
 **Open:** the hosted T4 run of the regenerated blob (the evaluation of record for the fresh test, the hosted grid and the
 transfer check); hosted BYOD (REL12). Status stays **Candidate**.
 
+### 2026-10-18 peer-review follow-up (row 72, F1-F14)
+
+The peer review of PR #14 traced every path that can score the fresh test and found only Section 8, under
+`preregistered`. Round-2 changes: the transfer check is split by CLINC domain (F1); the keep-frozen rule no longer runs
+into the adapted-above-frozen stop, the frozen model is then the system scored on the fresh test, and a rejected adapter
+is written with a `_not_selected` tag (F2); an intent-level cluster bootstrap is printed beside the pre-registered
+query-level interval, as a disclosed secondary analysis that leaves the verdict rule unchanged (F4); grid records carry
+run counters, and a selection that differs from the first pre-registered grid of the runtime is exploratory (F5);
+`fresh_result` and the evaluation report record device and dtype (F12). The evaluation of record must be a hosted
+**T4, bfloat16** run with the pre-registered settings; a CPU float32 pass is labelled the same way in-notebook but is not
+the record.
+
+**Deviation from the pre-registration's time estimate (F7).** The pre-registration estimated the CPU grid at 10-15 min;
+the 2026-10-17 build record measured 1,488 s (24.8 min; 417-554 s per configuration) on a shared workstation. The
+pre-registration text stays as committed; the notebook's timings now quote the measurement.
+
+**Fresh-test exposure through the workshop (F8).** The semantic-search workshop draws 2 test.csv messages per intent with
+its `SAMPLE_SEED` form field. At seed 42 (every recorded workshop run) none is a fresh-test message; at seeds 0, 1, 7 and
+123 the draw holds 36, 29, 41 and 46 of them (checked 2026-10-18 with `samples.workshop_w16_queries`, data only). Maintainer
+runs of the workshop keep seed 42; any other run is to be recorded here as a fresh-test exposure. The workshop is unchanged.
+
+**Transfer check split (F1), CPU build record, added after the 2026-10-17 record.** The adapted model is C0, retrained
+on CPU with the pre-registered settings (per-epoch validation MRR identical to the grid row). The fresh test was masked.
+Each row ranks against its own intent phrases. The pooled row reproduces the 2026-10-17 numbers exactly.
+
+| Row (CPU, float32) | Queries / phrases | Frozen MRR | Adapted MRR | Delta MRR | 95 % CI, queries | 95 % CI, intents |
+|---|---|---|---|---|---|---|
+| Near-domain (CLINC banking + credit_cards) | 60 / 30 | 0.7238 | 0.7833 | +0.0595 | 0.0190 to 0.1082 | 0.0195 to 0.1085 |
+| Other 8 domains | 240 / 120 | 0.7946 | 0.7736 | -0.0209 | -0.0418 to -0.0017 | -0.0460 to 0.0026 |
+| Pooled (2026-10-17 view) | 300 / 150 | 0.7608 | 0.7641 | +0.0033 | -0.0143 to 0.0217 | -0.0170 to 0.0239 |
+
+Old -> new: the pooled interval across 0 hid a near-domain gain and a small other-domain loss whose query-level interval
+excludes 0 but whose intent-level interval does not. Display only; nothing in the selection changes. On the exposed
+development test the intent-level interval of the paired MRR difference is 0.0877 to 0.1838 (query-level 0.1069 to
+0.1664).
+
 ## Qwen3 semantic search and reranking notebook — 2026-09-26 follow-up
 
 This record concerns `DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb` on PR #8, separately from the primary E2E embedding tutorial above. Assessment used fleet NOTEBOOK_SPEC 2.2 (blob `046d866eac7cc67b1539a4ba370ebc965341c87b`) and this repository's search/reranking specification. The compatible 2.1 declaration remains; the 2.2 guided recommendations do not change mandatory profile semantics.
