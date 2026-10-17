@@ -728,6 +728,45 @@ TRANSFER_PER_INTENT = 2
 TRANSFER_SEED = 20_261_017
 TRANSFER_INSTRUCTION = "Given a request to a virtual assistant, retrieve the intent it expresses"
 TRANSFER_MANIFEST_SHA256 = "2f45326ae57c93c79a65f090be7a7623507415298613a15eb6553f960cfb9577"
+# The `banking` and `credit_cards` domains of CLINC150 (data/domains.json at the pinned commit, sha256
+# b947b579d3b8e74b06f93b01083d8efaff2888b43a3e362533bd88a6e1211b3a): near Banking77's own domain, so the
+# transfer check reports them apart from the other 8 domains (peer review F1, 2026-10-18).
+TRANSFER_NEAR_DOMAINS = ("banking", "credit_cards")
+TRANSFER_NEAR_INTENTS = frozenset(
+    (
+        "account_blocked",
+        "application_status",
+        "apr",
+        "balance",
+        "bill_balance",
+        "bill_due",
+        "card_declined",
+        "credit_limit",
+        "credit_limit_change",
+        "credit_score",
+        "damaged_card",
+        "expiration_date",
+        "freeze_account",
+        "improve_credit_score",
+        "interest_rate",
+        "international_fees",
+        "min_payment",
+        "new_card",
+        "order_checks",
+        "pay_bill",
+        "pin_change",
+        "redeem_rewards",
+        "replacement_card_duration",
+        "report_fraud",
+        "report_lost_card",
+        "rewards_balance",
+        "routing",
+        "spending_history",
+        "transactions",
+        "transfer",
+    )
+)
+TRANSFER_GROUPS = ("near-domain (CLINC banking + credit_cards)", "other 8 domains")
 
 
 def fetch_transfer_corpus(*, cache_dir: str | Path | None = None, fetcher: Any = None) -> bytes:
@@ -783,4 +822,9 @@ def build_transfer_set(data: bytes, *, verify: bool = True) -> dict[str, Any]:
             f"transfer set manifest {digest[:16]}... differs from the pinned "
             f"{TRANSFER_MANIFEST_SHA256[:16]}..."
         )
-    return {"records": records, "documents": docs, "manifest_sha256": digest}
+    groups = {}
+    for label in TRANSFER_GROUPS:
+        near = label == TRANSFER_GROUPS[0]
+        part = [r for r in records if (r["intent"] in TRANSFER_NEAR_INTENTS) == near]
+        groups[label] = {"records": part, "documents": documents(part)}
+    return {"records": records, "documents": docs, "manifest_sha256": digest, "groups": groups}

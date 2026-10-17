@@ -61,6 +61,7 @@ class _Pipe:
 
     def __init__(self, adapted_mrr: float):
         self.adapter = {"trainable_names": ["layers.27.w"]}
+        self.device = "cpu"
         self.adapted_mrr = adapted_mrr
         self.scored: list[tuple[str, tuple[str, ...]]] = []
 
@@ -73,7 +74,7 @@ class _Pipe:
         return _m(0.6, 0.7, len(records))
 
 
-FRESH = [{"id": f"fresh-{i:04d}", "query": f"fresh {i}", "positive": "d"} for i in range(4)]
+FRESH = [{"id": f"fresh-{i:04d}", "query": f"fresh {i}", "positive": "d", "intent": f"intent_{i % 2}"} for i in range(4)]
 REPORT = [{"id": f"test-{i:04d}", "query": f"exposed {i}", "positive": "d"} for i in range(3)]
 VAL = [{"id": f"validation-{i:04d}", "query": f"val {i}", "positive": "d"} for i in range(3)]
 
@@ -88,7 +89,7 @@ def section_8_namespace(*, adapted_mrr: float, use_byod: bool, preregistered: bo
         "adapt_result": {"history": [], "best_epoch": 0}, "adapt_seconds": 0.0, "near_duplicates": {"near_duplicates": {"test": 9}},
         "USE_BYOD": use_byod, "preregistered": preregistered, "settings_differing": [] if preregistered else ["epochs"], "run_settings": {},
         "grid_selection": selection, "fresh": {"manifest": {"manifest_sha256": "f" * 64}} if not use_byod else None, "fresh_records": FRESH if not use_byod else [],
-        "test_look": samples.test_look, "paired_rank_comparison": metrics.paired_rank_comparison,
+        "test_look": samples.test_look, "paired_rank_comparison": metrics.paired_rank_comparison, "paired_cluster_comparison": metrics.paired_cluster_comparison,
         "brief": lambda m: {k: m[k] for k in ("recall@1", "mrr")},
     }
 
@@ -319,7 +320,7 @@ def test_transfer_set_draws_two_per_intent_and_is_pinned():
 def test_transfer_cell_is_display_only(notebook):
     source = _cell(notebook, "transfer = build_transfer_set(")
     assert "RUN_TRANSFER_CHECK = True  # @param" in source
-    assert "pipe.evaluate_base(transfer['records']" in source and "paired_rank_comparison(" in source
+    assert "pipe.evaluate_base(group['records']" in source and "paired_rank_comparison(" in source and "paired_cluster_comparison(" in source
     for word in ("grid_selection", "preregistered =", "raise RuntimeError(f"):
         assert word not in source, word
 
@@ -382,3 +383,121 @@ def test_stamp_revision_holds_the_carried_modules(notebook):
         body = [line for line in committed.decode("utf-8").splitlines() if line.strip() and not line.strip().startswith("from .") and not line.startswith("DEFAULT_WEIGHTS_DIR")]
         carried = _source(cell)
         assert all(line in carried for line in body), rel
+
+
+# ---- round 2 (peer review 2026-10-18) -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("adapted_mrr", [0.65, 0.71])  # adapted validation MRR below / just above frozen (0.70), inside the margin
+def test_keep_frozen_skips_the_adapted_stop_scores_frozen_and_tags_the_adapter(notebook, tmp_path, monkeypatch, adapted_mrr):
+    """F2: under the keep-frozen rule the run neither stops nor exports the rejected adapter under pre-registered names."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "outputs").mkdir()
+    namespace = section_8_namespace(adapted_mrr=adapted_mrr, use_byod=False, preregistered=True, keep_frozen=True)
+    exec(compile(_cell(notebook, "delta_mrr = "), "<section 8>", "exec"), namespace)
+    fresh_ids = tuple(r["id"] for r in FRESH)
+    assert ("frozen", fresh_ids) in namespace["pipe"].scored and ("adapted", fresh_ids) not in namespace["pipe"].scored
+    assert namespace["fresh_result"]["selected_model"] == "frozen" and namespace["fresh_result"]["adapted"] is None
+    assert namespace["run_tag"] == "" and namespace["adapter_tag"] == "_not_selected"
+    nine = _cell(notebook, "pipe.save_artifact(")
+    assert "Path(f'outputs/qwen3_embedding_adapter{adapter_tag}')" in nine and "retrieval{adapter_tag}.csv" in nine
+    assert "transfer_check{adapter_tag}.json" in _cell(notebook, "transfer = build_transfer_set(")
+
+
+def test_without_keep_frozen_a_failed_validation_comparison_still_stops(notebook, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "outputs").mkdir()
+    with pytest.raises(RuntimeError, match="adapted validation MRR must be above"):
+        exec(compile(_cell(notebook, "delta_mrr = "), "<section 8>", "exec"), section_8_namespace(adapted_mrr=0.65, use_byod=False, preregistered=True))
+
+
+def test_fresh_result_carries_device_and_intent_level_interval(notebook, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "outputs").mkdir()
+    namespace = section_8_namespace(adapted_mrr=0.85, use_byod=False, preregistered=True)
+    exec(compile(_cell(notebook, "delta_mrr = "), "<section 8>", "exec"), namespace)
+    result = namespace["fresh_result"]
+    assert result["device"] == "cpu" and result["dtype"] == "float32"
+    assert result["paired_mrr_intent_cluster"]["n_clusters"] == 2
+
+
+class _GridPipe:
+    def __init__(self, scores):
+        self.scores = scores  # (trainable_layers, lr) -> best validation MRR
+
+    def adapt(self, train, val, *, lr, trainable_layers, **kw):
+        best = self.scores[(trainable_layers, lr)]
+        return {"best_epoch": 2, "history": [{"val": {"mrr": 0.70, "recall@1": 0.6}}, {"val": {"mrr": best - 0.01, "recall@1": 0.7}}, {"val": {"mrr": best, "recall@1": 0.7}}]}
+
+    def restore_base(self):
+        return []
+
+
+def _grid_namespace(scores):
+    import time
+
+    return {
+        "pipe": _GridPipe(scores), "time": time, "json": json, "GRID_CONFIGS": samples.GRID_CONFIGS, "PREREGISTERED_SETTINGS": samples.PREREGISTERED_SETTINGS,
+        "select_configuration": samples.select_configuration, "train_records": [], "val_records": [], "INSTRUCTION": samples.DEFAULT_INSTRUCTION,
+        "DEFAULT_INSTRUCTION": samples.DEFAULT_INSTRUCTION, "report_on_exposed": True, "data_source": "stand-in", "NOTEBOOK_SOURCE": {"repository_revision": "r"},
+    }
+
+
+C0_WINS = {(2, 5e-5): 0.83, (2, 2e-5): 0.80, (4, 2e-5): 0.83}
+C2_WINS = {(2, 5e-5): 0.80, (2, 2e-5): 0.80, (4, 2e-5): 0.85}
+
+
+def test_grid_reruns_never_overwrite_and_a_changed_selection_is_not_a_reproduction(notebook, tmp_path, monkeypatch):
+    """F5: run counters on the grid record; Section 8 refuses to read the fresh test for a changed selection."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "outputs").mkdir()
+    source = _cell(notebook, "grid_selection = select_configuration(")
+    namespace = _grid_namespace(C0_WINS)
+    exec(compile(source, "<grid 1>", "exec"), namespace)
+    exec(compile(source, "<grid 2>", "exec"), namespace)
+    namespace["pipe"] = _GridPipe(C2_WINS)
+    exec(compile(source, "<grid 3>", "exec"), namespace)
+    names = sorted(f.name for f in (tmp_path / "outputs").iterdir())
+    assert names == ["qwen3_embedding_grid_validation.json", "qwen3_embedding_grid_validation_exploratory_3.json", "qwen3_embedding_grid_validation_reproduction_2.json"]
+    assert json.loads((tmp_path / "outputs" / "qwen3_embedding_grid_validation.json").read_text(encoding="utf-8"))["selection"]["config"] == "C0"
+    eight = section_8_namespace(adapted_mrr=0.85, use_byod=False, preregistered=True)
+    eight.update(grid_selection=namespace["grid_selection"], first_grid_selection=namespace["first_grid_selection"])
+    exec(compile(_cell(notebook, "delta_mrr = "), "<section 8>", "exec"), eight)
+    assert not _fresh_scored(eight) and eight["look"] == "not scored (exploratory)"
+    assert "configuration differs from the first pre-registered grid of this runtime" in eight["settings_differing"]
+
+
+def test_section_7b_that_fails_leaves_no_preregistered_state(notebook):
+    """F11: an out-of-range field raises in adapt; the earlier pre-registered state must not survive."""
+    source = _cell(notebook, "settings_differing = preregistration_diff(")
+
+    def refuse(*a, **kw):
+        raise ValueError("epochs must be an int in 1..20")
+
+    namespace = {"pipe": types.SimpleNamespace(adapt=refuse), "grid_selection": None, "GRID_CONFIGS": samples.GRID_CONFIGS, "preregistered": True, "settings_differing": [], "run_settings": {"x": 1},
+                 "train_records": [], "val_records": [], "INSTRUCTION": "i", "time": __import__("time"), "report": print}
+    with pytest.raises(ValueError):
+        exec(compile(source, "<section 7b>", "exec"), namespace)
+    assert namespace["preregistered"] is False and "run_settings" not in namespace
+
+
+def test_transfer_groups_split_near_domain_from_the_other_eight():
+    """F1: CLINC banking + credit_cards (30 intents, 60 queries) are reported apart from the other 120 intents (240)."""
+    near = sorted(samples.TRANSFER_NEAR_INTENTS)
+    assert len(near) == 30 and samples.TRANSFER_NEAR_DOMAINS == ("banking", "credit_cards")
+    intents = near + [f"other_{i:03d}" for i in range(120)]
+    rows = [[f"utterance {k} for {it}", it] for it in intents for k in range(30)]
+    built = samples.build_transfer_set(json.dumps({"test": rows}).encode("utf-8"), verify=False)
+    near_group, other_group = (built["groups"][label] for label in samples.TRANSFER_GROUPS)
+    assert (len(near_group["records"]), len(near_group["documents"])) == (60, 30)
+    assert (len(other_group["records"]), len(other_group["documents"])) == (240, 120)
+
+
+def test_cluster_bootstrap_resamples_whole_intents():
+    a, b = [1, 2, 1, 2, 3, 1] * 5, [1, 1, 1, 1, 2, 1] * 5
+    clusters = [f"i{k % 3}" for k in range(len(a))]
+    result = metrics.paired_cluster_comparison(a, b, clusters)
+    assert result["n_clusters"] == 3 and result == metrics.paired_cluster_comparison(a, b, clusters)
+    assert result["ci"][0] <= result["delta_mrr"] <= result["ci"][1]
+    with pytest.raises(ValueError):
+        metrics.paired_cluster_comparison([1], [1], [])

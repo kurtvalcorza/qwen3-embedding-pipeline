@@ -34,11 +34,11 @@ EXPECTED_OUTPUTS = (
     "outputs/qwen3_embedding_train.csv",
     "outputs/qwen3_embedding_input_manifest.json",
     "outputs/qwen3_embedding_evaluation_report{run_tag}.json",
-    "outputs/qwen3_embedding_retrieval{run_tag}.csv",
-    "outputs/qwen3_embedding_adapter{run_tag}",
+    "outputs/qwen3_embedding_retrieval{adapter_tag}.csv",
+    "outputs/qwen3_embedding_adapter{adapter_tag}",
     "outputs/qwen3_embedding_result{run_tag}.json",
     "outputs/qwen3_embedding_grid_validation{grid_tag}.json",
-    "outputs/qwen3_embedding_transfer_check{run_tag}.json",
+    "outputs/qwen3_embedding_transfer_check{adapter_tag}.json",
 )
 CODE_MARKERS = (
     # Stage 4: pinned corpus, validation, document set, disjoint split, CSV, refusal probes
@@ -101,7 +101,12 @@ CODE_MARKERS = (
     "adapted_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)",
     "'delta_vs_frozen'",
     "comparison['verdict'] = {'adapted_vs_frozen_mrr': direction(delta_mrr), 'adapted_vs_frozen_validation_mrr': direction(delta_val_mrr), 'frozen_vs_random_floor_validation_mrr': frozen_vs_floor}",
-    "if not USE_BYOD and preregistered and comparison['verdict']['adapted_vs_frozen_validation_mrr'] != 'improved':",
+    "keep_frozen = bool(preregistered and grid_selection['keep_frozen'])",
+    "if not USE_BYOD and preregistered and not keep_frozen and comparison['verdict']['adapted_vs_frozen_validation_mrr'] != 'improved':",
+    "adapter_tag = run_tag + ('_not_selected' if globals().get('grid_selection') and grid_selection['keep_frozen'] else '')",
+    "'paired_mrr_intent_cluster': paired_cluster_comparison(frozen_fresh['ranks'], adapted_fresh['ranks'], [r['intent'] for r in fresh_records]) if adapted_fresh else None,",
+    "grid_runs = globals().get('grid_runs', 0) + 1",
+    "preregistered, settings_differing = False, ['section 7b did not finish']",
     "'verdict': comparison['verdict']",
     # Stage 9: retrieval before/after, batch report, artifact, reload parity, provenance
     "single_report = evaluation_report(",
@@ -110,7 +115,8 @@ CODE_MARKERS = (
     "assert parity['query_vectors_identical'] and abs(in_memory_val['mrr'] - reloaded_val['mrr']) < 1e-9",
     # R72-M2: the optional transfer check (display only)
     "transfer = build_transfer_set(fetch_transfer_corpus(cache_dir='weights/clinc150'))",
-    "transfer_frozen = pipe.evaluate_base(transfer['records'], instruction=TRANSFER_INSTRUCTION, candidates=transfer['documents'])",
+    "for label, group in transfer['groups'].items():",
+    "g_frozen = pipe.evaluate_base(group['records'], instruction=TRANSFER_INSTRUCTION, candidates=group['documents'])",
     "weight_entry = next(entry for entry in snapshot['files'] if entry['path'] == WEIGHT_FILE)",
     "'weight_format': 'safetensors, digest-verified'",
     "'corpus': {'name': CORPUS_NAME, 'release': CORPUS_RELEASE, 'base_url': CORPUS_BASE_URL",

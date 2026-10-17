@@ -123,3 +123,44 @@ def paired_rank_comparison(
         "n_unchanged": sum(d == 0 for d in diffs),
         "method": "paired bootstrap over queries of the reciprocal-rank difference (percentile interval)",
     }
+
+
+def paired_cluster_comparison(
+    ranks_a: Sequence[int],
+    ranks_b: Sequence[int],
+    clusters: Sequence[str],
+    *,
+    n_resamples: int = 2_000,
+    seed: int = 0,
+    level: float = 0.95,
+) -> dict[str, Any]:
+    """The cluster (intent-level) version of `paired_rank_comparison`: whole clusters are resampled with
+    replacement, keeping every query of a drawn cluster, so queries sharing an intent document are not treated
+    as independent. A secondary analysis next to the query-level interval, not a replacement for it."""
+    if not (len(ranks_a) == len(ranks_b) == len(clusters)) or not ranks_a:
+        raise ValueError("cluster comparison needs equal-length, non-empty rank and cluster lists")
+    by_cluster: dict[str, list[float]] = {}
+    for a, b, c in zip(ranks_a, ranks_b, clusters, strict=True):
+        by_cluster.setdefault(str(c), []).append(1.0 / b - 1.0 / a)
+    groups = [by_cluster[k] for k in sorted(by_cluster)]
+    rng = random.Random(seed)
+    means = []
+    for _ in range(n_resamples):
+        drawn = [groups[rng.randrange(len(groups))] for _ in groups]
+        means.append(sum(sum(g) for g in drawn) / sum(len(g) for g in drawn))
+    means.sort()
+    lo = means[int((1 - level) / 2 * n_resamples)]
+    hi = means[min(n_resamples - 1, int((1 + level) / 2 * n_resamples))]
+    diffs = [d for g in groups for d in g]
+    return {
+        "n_queries": len(diffs),
+        "n_clusters": len(groups),
+        "delta_mrr": sum(diffs) / len(diffs),
+        "ci": [lo, hi],
+        "ci_level": level,
+        "n_resamples": n_resamples,
+        "seed": seed,
+        "method": (
+            "paired cluster bootstrap over intents (whole intents resampled, percentile interval); secondary"
+        ),
+    }

@@ -142,7 +142,8 @@ TEMPLATE = {
         "data. The optional transfer check in Section 10 compares the frozen and adapted models on CLINC150 [5], which is not an MTEB task.\n\n"
         "**Pre-registered evaluation protocol (2026-10-17).** The learning rate and layer count of the old default were compared on the 385 seed-42 "
         "test queries in 2026-09, so those queries are the **exposed development test**: shown every run, not independent evidence. The "
-        "configuration is now chosen on validation by a pre-registered rule (Section 7), and a pinned 770-query **fresh test** drawn from "
+        "configuration is re-checked on validation by a pre-registered rule that keeps the previous default unless a challenger clearly beats it "
+        "(Section 7); what makes the reported number independent is the pinned 770-query **fresh test**, which played no part in any choice, drawn from "
         "messages this repository had never scored is read **only under the exact pre-registered settings**; see `docs/release-verification.md` "
         "for the recorded evaluation and its reproductions. The carried `metrics.py` ranks the "
         "documents for every held-out query by cosine and reads the rank of its positive: **recall@1**, **recall@5**, "
@@ -169,7 +170,7 @@ TEMPLATE = {
         "intent split stands in for your retrieval task. The repository exposes none of these."
     ),
     "prerequisites": [
-        "- **Runtime:** a fresh supported runtime (Google Colab or Jupyter, Python 3.12). The default path runs on CPU and uses CUDA automatically when available. **Precision differs by device:** the pipeline runs float32 on CPU and bfloat16 on CUDA, so cosine values and the recorded metrics can differ between the two. CPU is adequate for this sample: the build record measured about 5 s to load and digest-verify the 1.19 GB snapshot, about 30 s to embed the 385 test queries and 77 documents, and about 47 s per training epoch over 616 pairs plus a validation pass per epoch. Building the isolated environment (the pinned `torch==2.14.0` among its packages; reused on a re-run) and the 1.19 GB checkpoint are the large downloads of the run.",
+        "- **Runtime:** a fresh supported runtime (Google Colab or Jupyter, Python 3.12). The default path runs on CPU and uses CUDA automatically when available. **Precision differs by device:** the pipeline runs float32 on CPU and bfloat16 on CUDA, so cosine values and the recorded metrics can differ between the two. CPU is adequate for this sample: the build record measured about 5 s to load and digest-verify the 1.19 GB snapshot, about 30 s to embed the 385 test queries and 77 documents, and, in the 2026-10-17 CPU build record, about 7–9 minutes per grid configuration (two epochs over 616 pairs, each with a validation pass; the default path trains four times: three grid configurations and the selected one). Building the isolated environment (the pinned `torch==2.14.0` among its packages; reused on a re-run) and the 1.19 GB checkpoint are the large downloads of the run.",
         "- **Knowledge:** basic Python and NumPy; what a dense vector, a unit norm and cosine similarity are; what recall@k and mean reciprocal rank measure and why they need a labelled query–document set; what a contrastive (InfoNCE) loss with in-batch negatives does.",
         "- **Data contract:** records are `{id, query, positive}` — a query of 1..100,000 characters (text beyond 8,192 tokens is truncated and flagged at inference; queries and documents are truncated to 64 tokens **during training only**), a positive document of 1..1,000 characters, an optional `negative` document (added to the document set), ids matching `[A-Za-z0-9_.:-]{1,64}` and unique; a BYOD dataset needs 12..20,000 distinct queries (20 % go to test and 15 % to validation, and at least 8 must stay for training) and at least 2 distinct positives; queries are de-duplicated ignoring case, punctuation and spacing before splitting so the same message never sits in two splits, and near-paraphrases across splits (token Jaccard ≥ 0.8) are counted and reported, not removed. BYOD accepts CSV, JSON or JSONL in that shape.",
         "- **Validation is structural, not semantic:** nothing checks that a positive is relevant to its query or that the instruction describes the task — a mislabelled pair set is fine-tuned on without complaint.",
@@ -438,7 +439,7 @@ TEMPLATE = {
         },
         {
             "md": (
-                "## 7. Bounded contrastive fine-tuning, configured on validation\n\n**7a. The pre-registered validation grid.** The learning rate and the number of trainable layers are chosen here, on the 154 validation queries only, by a rule written down before any run (`docs/qwen3-embedding-preregistration.md`). Three configurations are trained with every other setting fixed (2 epochs, batch 16, temperature 0.05, seed 0): **C0** 2 layers at 5e-5 (the previous default), **C1** 2 layers at 2e-5 and **C2** 4 layers at 2e-5. Each is scored by its best-epoch validation MRR. `select_configuration` keeps C0 unless a challenger beats it by at least **0.02** (a predeclared practical tolerance, not a significance test); C2, which doubles the adapter, must also beat the best 2-layer configuration by 0.02; and the frozen model is kept unless the selected configuration beats the frozen validation MRR by 0.02. Every configuration starts from the pinned base, and the grid never reads a test split. It takes a few minutes on a T4 (each configuration about as long as the training cell below) and is on by default (`RUN_GRID`). With `RUN_GRID = False` the training cell uses C0, and the run is exploratory because no selection was made in this session.\n\n**Predict before running:** C0's learning rate is two and a half times C1's. Will either challenger clear a 0.02 margin on validation MRR?"
+                "## 7. Bounded contrastive fine-tuning, configured on validation\n\n**7a. The pre-registered validation grid.** The learning rate and the number of trainable layers are chosen here, on the 154 validation queries only, by a rule written down before any run (`docs/qwen3-embedding-preregistration.md`). Three configurations are trained with every other setting fixed (2 epochs, batch 16, temperature 0.05, seed 0): **C0** 2 layers at 5e-5 (the previous default), **C1** 2 layers at 2e-5 and **C2** 4 layers at 2e-5. Each is scored by its best-epoch validation MRR. `select_configuration` keeps C0 unless a challenger beats it by at least **0.02** (a predeclared practical tolerance, not a significance test); C2, which doubles the adapter, must also beat the best 2-layer configuration by 0.02; and the frozen model is kept unless the selected configuration beats the frozen validation MRR by 0.02. Every configuration starts from the pinned base, and the grid never reads a test split. It takes a few minutes on a T4 and about 25 minutes on a workstation CPU (2026-10-17 build record), and it is on by default (`RUN_GRID`). With `RUN_GRID = False` the training cell uses C0, and the run is exploratory because no selection was made in this session.\n\n**Predict before running:** every configuration gets the same budget, 2 epochs (78 optimiser steps). With a learning rate two and a half times C1's, will C0 get further within that budget, and will either challenger clear a 0.02 margin on validation MRR?"
             ),
             "code": (
                 "RUN_GRID = True  # @param {{type:\"boolean\"}}\n"
@@ -462,16 +463,29 @@ TEMPLATE = {
                 "    for name, row in grid_rows.items():\n"
                 "        print({{name: {{k: round(v, 4) if isinstance(v, float) else v for k, v in row.items()}}}})\n"
                 "    print({{'selection': {{k: grid_selection[k] for k in ('config', 'settings', 'reason', 'selected_model')}}, 'margin': grid_selection['margin'], 'seconds': grid_seconds}})\n"
-                "    grid_tag = '' if (report_on_exposed and INSTRUCTION == DEFAULT_INSTRUCTION) else '_exploratory'\n"
+                "    # SCORE_ONCE item 5: each grid run has its own record; the first pre-registered one is never overwritten.\n"
+                "    grid_runs = globals().get('grid_runs', 0) + 1\n"
+                "    grid_data_preregistered = report_on_exposed and INSTRUCTION == DEFAULT_INSTRUCTION\n"
+                "    first_grid = globals().get('first_grid_selection')\n"
+                "    if grid_data_preregistered and first_grid is None:\n"
+                "        grid_tag, first_grid_selection = '', grid_selection\n"
+                "    elif grid_data_preregistered and first_grid['config'] == grid_selection['config']:\n"
+                "        grid_tag = f'_reproduction_{{grid_runs}}'\n"
+                "    else:\n"
+                "        grid_tag = f'_exploratory_{{grid_runs}}'\n"
+                "        if grid_data_preregistered:\n"
+                "            print({{'grid_selection_changed': {{'first': first_grid['config'], 'now': grid_selection['config']}}, 'consequence': 'recorded as exploratory; the fresh test is not read for a selection that differs from the first pre-registered grid of this runtime'}})\n"
                 "    with open(f'outputs/{stem}_grid_validation{{grid_tag}}.json', 'w', encoding='utf-8') as handle:\n"
-                "        json.dump({{'test_look': 'not scored (selection-only)', 'data_source': data_source, 'instruction': INSTRUCTION, 'rows': grid_rows, 'selection': grid_selection, 'seconds': grid_seconds, 'repository_revision': NOTEBOOK_SOURCE['repository_revision']}}, handle, indent=2, ensure_ascii=False)\n"
+                "        json.dump({{'test_look': 'not scored (selection-only)', 'grid_run': grid_runs, 'grid_tag': grid_tag, 'data_source': data_source, 'instruction': INSTRUCTION, 'rows': grid_rows, 'selection': grid_selection, 'seconds': grid_seconds, 'repository_revision': NOTEBOOK_SOURCE['repository_revision']}}, handle, indent=2, ensure_ascii=False)\n"
                 "else:\n"
                 "    print({{'grid': 'not run', 'consequence': 'the training cell uses C0 and this run is exploratory (no pre-registered selection in this session)'}})"
             ),
         },
         {
             "md": (
-                '**What to notice:** each configuration\'s epoch 0 (the same frozen validation MRR every time), its best epoch, the three best-epoch validation MRRs side by side, and which rule decided the `selection`.\n\n<details><summary>Check your reasoning</summary>The grid prints the answer for this run; there is no recorded hosted grid yet for this revision (`docs/release-verification.md` will carry it). What matters is the procedure: the choice is made on validation by a rule fixed in advance, and a difference smaller than the margin keeps the smaller, current configuration rather than chasing noise.</details>'
+                '**What to notice:** each configuration\'s epoch 0 (the same frozen validation MRR every time), its best epoch, the three best-epoch validation MRRs side by side, and which rule decided the `selection`.\n\n<details><summary>Check your reasoning</summary>The grid prints the answer for this run; there is no recorded hosted grid yet for this revision (`docs/release-verification.md` will carry it). What matters is the procedure: the choice is made on validation by a rule fixed in advance, and a difference smaller than the margin keeps the smaller, current configuration rather than chasing noise. In the 2026-10-17 CPU build record every configuration\'s best epoch was the last one (epoch 2): '
+                'validation MRR was still rising when the budget ran out, so the grid compares configurations **at this step budget**, not learning rates in general, and a '
+                'lower learning rate is handicapped by construction. The `EPOCHS = 4` experiment (exploratory) shows whether C1 catches up.</details>'
             ),
         },
         {
@@ -486,8 +500,8 @@ TEMPLATE = {
                 "`MAX_TRAIN_TOKENS` (64) **during training only**. Epoch 0 records the frozen model's validation retrieval "
                 "metrics over the validation document set; every epoch is scored the same way, and the epoch with the "
                 "highest validation MRR is kept.\n\n"
-                "Watch validation recall@1 climb by ten points or so over two epochs while recall@5 passes 95 % (about "
-                "47 s of training plus a validation pass per epoch on CPU; these are the previous blob's recorded runs). `LEARNING_RATE = 0` and `TRAINABLE_LAYERS = 0` "
+                "Watch validation recall@1 climb by ten points or so over two epochs while recall@5 passes 95 % ("
+                "the previous blob's recorded runs; training the selected configuration takes about 7–9 minutes on a workstation CPU in the 2026-10-17 build record, about a minute on a T4). `LEARNING_RATE = 0` and `TRAINABLE_LAYERS = 0` "
                 "mean *use the grid's selection*; any other value, like any other change to these fields, makes the run exploratory, and Section 8 "
                 "then reads validation and the exposed development test only. The cell prints `preregistered` and the `settings_differing` list. "
                 "Every call starts from the pinned base (`started_from` in the printed result), so a re-run with other settings is a "
@@ -502,6 +516,9 @@ TEMPLATE = {
                 "TRAINABLE_LAYERS = 0  # @param {{type:\"integer\"}}\n"
                 "TEMPERATURE = 0.05  # @param {{type:\"number\"}}\n"
                 "ADAPT_SEED = 0\n"
+                "# A Section 7b that does not finish (for example an out-of-range field) leaves no pre-registered state behind.\n"
+                "preregistered, settings_differing = False, ['section 7b did not finish']\n"
+                "globals().pop('run_settings', None)\n"
                 "# 0 = the configuration the Section 7a grid selected (C0 when the grid did not run in this session).\n"
                 "chosen = grid_selection['settings'] if globals().get('grid_selection') else GRID_CONFIGS['C0']\n"
                 "lr = LEARNING_RATE or chosen['lr']\n"
@@ -565,7 +582,12 @@ TEMPLATE = {
                 "test the cell prints the paired comparison: each query's reciprocal rank under both models, the MRR difference, how many queries "
                 "improved or got worse, and a paired bootstrap 95 % interval. The stop that keeps a broken run from exporting reads **validation**: on "
                 "the Banking77 sample under the pre-registered settings an adapted validation MRR that is not above the frozen one stops the cell; "
-                "results on the fresh test are verdicts only, never stops. "
+                "results on the fresh test are verdicts only, never stops. When the pre-registered rule kept the frozen model (`keep_frozen`), that stop does "
+                "not apply: the frozen model is the system scored on the fresh test, and Section 9 writes the rejected adapter under a `_not_selected` name. "
+                "The adapted validation numbers were used to choose the epoch and the configuration, so they are optimistic; the fresh test is the "
+                "unbiased comparison. The fresh test has 10 queries per intent, and queries of one intent share a document, so beside the query-level "
+                "interval (the pre-registered one) the cell prints an intent-level interval that resamples whole intents, a disclosed second analysis "
+                "that is usually wider. "
                 "The cell refuses to run if the pipeline holds the pinned base (Section 5 or 6 re-run after Section 7). The bootstrap interval covers query sampling only, not seed-to-seed variation, and everything here is one seeded split of one corpus; the deltas are "
                 "sample-sanity evidence that the adaptation contract works, not a benchmark, and a gain on Banking77 "
                 "intents says nothing about your retrieval task until you measure it there.\n\n"
@@ -595,7 +617,13 @@ TEMPLATE = {
                 "for metric, row in comparison.items():\n"
                 "    print({{metric: row}})\n"
                 "# DOC11: the stop reads validation, never a test split.\n"
-                "if not USE_BYOD and preregistered and comparison['verdict']['adapted_vs_frozen_validation_mrr'] != 'improved':\n"
+                "# F5: a selection that differs from the first pre-registered grid of this runtime is never a reproduction.\n"
+                "first_grid = globals().get('first_grid_selection')\n"
+                "if preregistered and first_grid is not None and grid_selection['config'] != first_grid['config']:\n"
+                "    preregistered, settings_differing = False, [*settings_differing, 'configuration differs from the first pre-registered grid of this runtime']\n"
+                "# The pre-registered keep-frozen rule: when the grid kept the frozen model, the adapted-above-frozen stop does not apply.\n"
+                "keep_frozen = bool(preregistered and grid_selection['keep_frozen'])\n"
+                "if not USE_BYOD and preregistered and not keep_frozen and comparison['verdict']['adapted_vs_frozen_validation_mrr'] != 'improved':\n"
                 "    raise RuntimeError(f\"On the Banking77 sample under the pre-registered settings the adapted validation MRR must be above the frozen validation MRR ({{adapted_val['mrr']:.4f}} vs {{frozen_val['mrr']:.4f}}): Run all again from the top; if it repeats, report it.\")\n"
                 "\n"
                 "# SCORE_ONCE: the fresh test is read only under the pre-registered settings.\n"
@@ -604,7 +632,6 @@ TEMPLATE = {
                 "look = test_look(preregistered, fresh_looks)\n"
                 "fresh_result = None\n"
                 "if preregistered:\n"
-                "    keep_frozen = grid_selection['keep_frozen']\n"
                 "    frozen_fresh = pipe.evaluate_base(fresh_records, instruction=INSTRUCTION, candidates=document_set)\n"
                 "    adapted_fresh = None if keep_frozen else pipe.evaluate(fresh_records, instruction=INSTRUCTION, candidates=document_set)\n"
                 "    fresh_result = {{\n"
@@ -614,21 +641,28 @@ TEMPLATE = {
                 "        'frozen': brief(frozen_fresh),\n"
                 "        'adapted': brief(adapted_fresh) if adapted_fresh else None,\n"
                 "        'paired_mrr': paired_rank_comparison(frozen_fresh['ranks'], adapted_fresh['ranks']) if adapted_fresh else None,\n"
+                "        'paired_mrr_intent_cluster': paired_cluster_comparison(frozen_fresh['ranks'], adapted_fresh['ranks'], [r['intent'] for r in fresh_records]) if adapted_fresh else None,\n"
                 "        'manifest_sha256': fresh['manifest']['manifest_sha256'],\n"
+                "        'device': str(pipe.device),\n"
+                "        'dtype': 'bfloat16' if str(pipe.device).startswith('cuda') else 'float32',\n"
                 "    }}\n"
                 "    if adapted_fresh:\n"
                 "        fresh_result['verdict'] = direction(adapted_fresh['mrr'] - frozen_fresh['mrr'])\n"
                 "    fresh_looks += 1\n"
                 "    run_tag = '' if fresh_looks == 1 and look != 'reproduction' else f'_reproduction_{{fresh_looks}}'\n"
-                "    print({{'fresh_test': {{k: v for k, v in fresh_result.items() if k != 'paired_mrr'}}}})\n"
+                "    print({{'fresh_test': {{k: v for k, v in fresh_result.items() if k not in ('paired_mrr', 'paired_mrr_intent_cluster')}}}})\n"
                 "    if fresh_result['paired_mrr']:\n"
                 "        paired = fresh_result['paired_mrr']\n"
-                "        print({{'fresh_test_paired_mrr': {{'delta': round(paired['delta_mrr'], 4), 'ci95': [round(x, 4) for x in paired['ci']], 'improved': paired['n_improved'], 'worse': paired['n_worse'], 'unchanged': paired['n_unchanged']}}}})\n"
+                "        print({{'fresh_test_paired_mrr': {{'delta': round(paired['delta_mrr'], 4), 'ci95': [round(x, 4) for x in paired['ci']], 'improved': paired['n_improved'], 'worse': paired['n_worse'], 'unchanged': paired['n_unchanged']}}, 'ci95_intent_level': [round(x, 4) for x in fresh_result['paired_mrr_intent_cluster']['ci']]}})\n"
                 "    print({{'test_look': look, 'note': 'a runtime cannot know about other runtimes; docs/release-verification.md names the evaluation of record'}})\n"
                 "else:\n"
                 "    exploratory_runs += 1\n"
                 "    run_tag = f'_exploratory_{{exploratory_runs}}'\n"
                 "    print({{'test_look': look, 'settings_differing': settings_differing, 'note': 'exploratory: validation and the exposed development test only; the fresh test was not read'}})\n"
+                "# F2: an adapter the pre-registered rule did not select is never exported under the pre-registered names.\n"
+                "adapter_tag = run_tag + ('_not_selected' if globals().get('grid_selection') and grid_selection['keep_frozen'] else '')\n"
+                "if adapter_tag != run_tag:\n"
+                "    print({{'selected_model': 'frozen', 'note': f'the adapter was not selected (keep-frozen rule); Sections 9 and 10 write it with the {{adapter_tag}} tag'}})\n"
                 "evaluation_report_payload = {{\n"
                 "    'model': {{'id': MODEL_ID, 'revision': MODEL_REVISION, 'key': MODEL_KEY}},\n"
                 "    'data_source': data_source,\n"
@@ -642,6 +676,8 @@ TEMPLATE = {
                 "    'preregistered': preregistered,\n"
                 "    'settings_differing': settings_differing,\n"
                 "    'run_settings': run_settings,\n"
+                "    'device': str(pipe.device),\n"
+                "    'dtype': 'bfloat16' if str(pipe.device).startswith('cuda') else 'float32',\n"
                 "    'grid_selection': globals().get('grid_selection'),\n"
                 "    'reported_split': report_label,\n"
                 "    'frozen_reported_split': frozen_report,\n"
@@ -706,11 +742,11 @@ TEMPLATE = {
                 "document_shift = {{'self_cosine_min': round(float(np.min(np.sum(doc_vectors * doc_vectors_after, axis=1))), 4), 'self_cosine_median': round(float(np.median(np.sum(doc_vectors * doc_vectors_after, axis=1))), 4)}}\n"
                 "single_report = evaluation_report(pipe.embed(probe_queries, kind='query', instruction=INSTRUCTION), sample_kind='three Banking77 test queries' if not USE_BYOD else 'three BYOD test queries')\n"
                 "print({{'document_shift': document_shift, 'batch_report_verdict': single_report['verdict'], 'probes_with_changed_top3': sum(r['frozen_top3'] != r['adapted_top3'] for r in rows), 'of': len(rows)}})\n"
-                "with open(f'outputs/{stem}_retrieval{{run_tag}}.csv', 'w', encoding='utf-8', newline='') as handle:\n"
+                "with open(f'outputs/{stem}_retrieval{{adapter_tag}}.csv', 'w', encoding='utf-8', newline='') as handle:\n"
                 "    writer = csv.DictWriter(handle, fieldnames=list(rows[0]))\n"
                 "    writer.writeheader()\n"
                 "    writer.writerows(rows)\n\n"
-                "artifact_dir = Path(f'outputs/{stem}_adapter{{run_tag}}')\n"
+                "artifact_dir = Path(f'outputs/{stem}_adapter{{adapter_tag}}')\n"
                 "shutil.rmtree(artifact_dir, ignore_errors=True)\n"
                 "pipe.save_artifact(artifact_dir, metadata={{'tutorial': '{stem}', 'data_source': data_source}})\n"
                 "artifact_manifest = json.loads((artifact_dir / 'manifest.json').read_text(encoding='utf-8'))\n"
@@ -766,7 +802,7 @@ TEMPLATE = {
         },
         {
             "md": (
-                "## 10. Optional transfer check: CLINC150 (display only)\n\nBanking77 may be in the model's training data (DAT9), so this cell asks a different question on a corpus that is **not an MTEB task**: does the adaptation chosen above help or hurt intent retrieval in other domains? CLINC150 [5] has 150 intents across ten domains (banking, travel, kitchen, small talk, ...). `fetch_transfer_corpus` downloads its `data_full.json` at a pinned commit and refuses a size or SHA-256 mismatch; `build_transfer_set` draws 2 in-scope test queries per intent (300) against the 150 intent phrases and refuses any draw but the pinned one. Both models embed with the same instruction (`TRANSFER_INSTRUCTION`), and the cell prints recall@1 and MRR beside the random floor and the lexical baseline, plus the paired bootstrap 95 % interval of the MRR difference. **Display only:** it is never a selection input and never a stop; whether CLINC150 was in Qwen3-Embedding's training data is undisclosed too, so it is a transfer check, not an out-of-distribution guarantee. About a minute on a T4. Set `RUN_TRANSFER_CHECK = False` to skip it.\n\n**Predict before running:** the adapter was trained on 77 banking intents. On 150 intents from ten domains, will it rank better or worse than the frozen model?"
+                "## 10. Optional transfer check: CLINC150 (display only)\n\nBanking77 may be in the model's training data (DAT9), so this cell asks two questions on a corpus that is **not an MTEB task**, CLINC150 [5] (150 intents in ten domains). `fetch_transfer_corpus` downloads its `data_full.json` at a pinned commit and refuses a size or SHA-256 mismatch; `build_transfer_set` draws 2 in-scope test queries per intent (300) and refuses any draw but the pinned one. Two of the ten domains, `banking` and `credit_cards`, are close to Banking77's own (balance, transfer, card declined, PIN change ...), so the check is reported in two rows, each ranked against its own intent phrases: **near-domain transfer** (60 queries, 30 phrases) and **the other 8 domains** (240 queries, 120 phrases: travel, kitchen, small talk, work ...), which is the only row that says anything about *other domains*. Both models embed with the same instruction (`TRANSFER_INSTRUCTION`); each row prints recall@1 and MRR beside the random floor and the lexical baseline, and the paired MRR difference with a query-level and an intent-level bootstrap 95 % interval. **Display only:** it is never a selection input and never a stop; whether CLINC150 was in Qwen3-Embedding's training data is undisclosed too, so it is a transfer check, not an out-of-distribution guarantee. About a minute on a T4. Set `RUN_TRANSFER_CHECK = False` to skip it.\n\n**Predict before running:** the adapter was trained on 77 banking intents. Will it help more on the near-domain row or on the other 8 domains, and could it hurt there?"
             ),
             "code": (
                 "RUN_TRANSFER_CHECK = True  # @param {{type:\"boolean\"}}\n"
@@ -778,33 +814,38 @@ TEMPLATE = {
                 "else:\n"
                 "    transfer = build_transfer_set(fetch_transfer_corpus(cache_dir='weights/clinc150'))\n"
                 "    t0 = time.perf_counter()\n"
-                "    transfer_floor = random_floor(len(transfer['documents']))\n"
-                "    transfer_lexical = pipe.lexical_baseline(transfer['records'], transfer['documents'])\n"
-                "    transfer_frozen = pipe.evaluate_base(transfer['records'], instruction=TRANSFER_INSTRUCTION, candidates=transfer['documents'])\n"
-                "    transfer_adapted = pipe.evaluate(transfer['records'], instruction=TRANSFER_INSTRUCTION, candidates=transfer['documents'])\n"
-                "    transfer_paired = paired_rank_comparison(transfer_frozen['ranks'], transfer_adapted['ranks'])\n"
-                "    for metric in ('recall@1', 'recall@5', 'mrr'):\n"
-                "        print({{metric: {{'random_floor': round(transfer_floor[metric], 4), 'lexical': round(transfer_lexical[metric], 4), 'frozen': round(transfer_frozen[metric], 4), 'adapted': round(transfer_adapted[metric], 4)}}}})\n"
-                "    print({{'transfer_paired_mrr': {{'delta': round(transfer_paired['delta_mrr'], 4), 'ci95': [round(x, 4) for x in transfer_paired['ci']], 'improved': transfer_paired['n_improved'], 'worse': transfer_paired['n_worse']}}, 'n_queries': transfer_frozen['n_queries'], 'n_documents': transfer_frozen['n_documents'], 'seconds': round(time.perf_counter() - t0, 1), 'role': 'display only; not a selection input or a stop'}})\n"
+                "    transfer_rows = {{}}\n"
+                "    for label, group in transfer['groups'].items():\n"
+                "        g_floor = random_floor(len(group['documents']))\n"
+                "        g_lexical = pipe.lexical_baseline(group['records'], group['documents'])\n"
+                "        g_frozen = pipe.evaluate_base(group['records'], instruction=TRANSFER_INSTRUCTION, candidates=group['documents'])\n"
+                "        g_adapted = pipe.evaluate(group['records'], instruction=TRANSFER_INSTRUCTION, candidates=group['documents'])\n"
+                "        g_intents = [r['intent'] for r in group['records']]\n"
+                "        transfer_rows[label] = {{'n_queries': g_frozen['n_queries'], 'n_documents': g_frozen['n_documents'], 'random_floor': g_floor, 'lexical': g_lexical, 'frozen': g_frozen, 'adapted': g_adapted, 'paired_mrr': paired_rank_comparison(g_frozen['ranks'], g_adapted['ranks']), 'paired_mrr_intent_cluster': paired_cluster_comparison(g_frozen['ranks'], g_adapted['ranks'], g_intents)}}\n"
+                "        row = transfer_rows[label]\n"
+                "        print({{label: {{'queries': row['n_queries'], 'phrases': row['n_documents'], 'random_floor_mrr': round(g_floor['mrr'], 4), 'lexical': brief(g_lexical), 'frozen': brief(g_frozen), 'adapted': brief(g_adapted)}}}})\n"
+                "        print({{label + ': paired MRR': {{'delta': round(row['paired_mrr']['delta_mrr'], 4), 'ci95_queries': [round(x, 4) for x in row['paired_mrr']['ci']], 'ci95_intents': [round(x, 4) for x in row['paired_mrr_intent_cluster']['ci']], 'improved': row['paired_mrr']['n_improved'], 'worse': row['paired_mrr']['n_worse']}}}})\n"
+                "    print({{'seconds': round(time.perf_counter() - t0, 1), 'role': 'display only; not a selection input or a stop'}})\n"
                 "    transfer_payload = {{\n"
                 "        'corpus': TRANSFER_NAME, 'release': TRANSFER_RELEASE, 'url': TRANSFER_URL, 'file': {{'name': TRANSFER_FILE[0], 'bytes': TRANSFER_FILE[1], 'sha256': TRANSFER_FILE[2]}}, 'license': TRANSFER_LICENSE,\n"
-                "        'manifest_sha256': transfer['manifest_sha256'], 'instruction': TRANSFER_INSTRUCTION,\n"
-                "        'random_floor': transfer_floor, 'lexical': transfer_lexical, 'frozen': transfer_frozen, 'adapted': transfer_adapted, 'paired_mrr': transfer_paired,\n"
-                "        'adapter': {{k: pipe.adapter[k] for k in ('trainable_layers', 'lr', 'best_epoch') if k in pipe.adapter}}, 'role': 'display only; not a selection input or a stop', 'run_test_look': look,\n"
+                "        'manifest_sha256': transfer['manifest_sha256'], 'instruction': TRANSFER_INSTRUCTION, 'near_domains': list(TRANSFER_NEAR_DOMAINS), 'groups': transfer_rows,\n"
+                "        'adapter': {{k: pipe.adapter[k] for k in ('trainable_layers', 'lr', 'best_epoch') if k in pipe.adapter}}, 'adapter_selected': adapter_tag == run_tag, 'role': 'display only; not a selection input or a stop', 'run_test_look': look,\n"
                 "    }}\n"
-                "    with open(f'outputs/{stem}_transfer_check{{run_tag}}.json', 'w', encoding='utf-8') as handle:\n"
+                "    with open(f'outputs/{stem}_transfer_check{{adapter_tag}}.json', 'w', encoding='utf-8') as handle:\n"
                 "        json.dump(transfer_payload, handle, indent=2, ensure_ascii=False)\n"
-                "    print({{'transfer_report': f'outputs/{stem}_transfer_check{{run_tag}}.json'}})"
+                "    print({{'transfer_report': f'outputs/{stem}_transfer_check{{adapter_tag}}.json'}})"
             ),
         },
         {
             "md": (
-                "**What to notice:** the four systems on CLINC150, the MRR difference and whether its interval excludes 0, and the number of queries that improved against those that got worse.\n\n<details><summary>Check your reasoning</summary>No recorded hosted value yet for this revision (`docs/release-verification.md` will carry it). Either outcome teaches something: an interval above 0 means the banking adaptation also sharpened intent retrieval elsewhere; an interval below 0 means it specialised the model at a cost to other domains; an interval across 0 means this check cannot tell. None of it changes the configuration chosen in Section 7.</details>"
+                "**What to notice:** the two rows separately, each MRR difference and whether its intervals exclude 0, and how many queries improved against those that got worse.\n\n<details><summary>Check your reasoning</summary>No recorded hosted value yet for this revision (`docs/release-verification.md` will carry it). Read the rows apart: the near-domain row asks whether the banking adaptation transfers to nearby finance intents; only the other-8-domains row speaks to other domains. There, an interval above 0 means the adaptation also sharpened intent retrieval outside finance, an interval below 0 means it specialised the model at a cost to those domains, and an interval across 0 means this check cannot tell; with 240 queries it can only detect fairly large changes. Pooling the two rows would mix a likely gain with a possible loss. None of it changes the configuration chosen in Section 7.</details>"
             ),
         },
     ],
     "closing": (
         "## Interpretation and limits\n\n"
+        "Read the fresh-test row of Section 8 first: it is the only number here that played no part in any choice (its recorded hosted value is in "
+        "`docs/release-verification.md`), and its intent-level interval is the more cautious of its two intervals. "
         "In the previous blob's recorded runs the frozen embedder already retrieved the right intent phrase for well over half of the "
         "exposed-development-test messages (recall@1 in the sixties against a lexical baseline in the thirties and a random floor of 1.3 %), "
         "and a bounded contrastive fine-tuning of the last two decoder layers on 616 pairs lifted recall@1 on those queries by more than ten "
@@ -850,7 +891,7 @@ TEMPLATE = {
         "The exact figure depends on the device; what matters is the direction and the adapter-size trade-off.</details>\n\n"
         "**More experiments (same procedure, they do not affect the default path):** set `TEMPERATURE = 0.2` and read whether the softer "
         "contrast learns as fast; set `EPOCHS = 4` and watch whether validation MRR keeps rising or turns (the best epoch is kept either way); "
-        "change `INSTRUCTION` in Section 4 and re-run from Section 5 to re-read the frozen numbers — the model is instruction-aware; or bring "
+        "change `INSTRUCTION` in Section 4, **run Section 4**, then Sections 5–6 to re-read the frozen numbers (to adapt as well, set `RUN_GRID = False` first: the run is exploratory anyway) — the model is instruction-aware; or bring "
         "your own pairs through BYOD (re-run from Section 4) and read the lexical baseline before the adapted number. Each of these is "
         "exploratory: Section 8 reports validation and the exposed development test, never the fresh test, and the files carry an `_exploratory_<n>` tag.\n\n"
         '## Troubleshooting\n\n- **Section 1 stops with "This notebook needs a Linux x86_64 runtime"** — you are on Windows, macOS or an ARM machine. Use Google '
@@ -886,8 +927,9 @@ TEMPLATE = {
         'sharper contrast.\n- **Frozen / adapted / pinned base:** the packaged model; the model after Section 7; the verified packaged weights every adaptation '
         'starts from (`restore_base`).\n- **Query-disjoint split:** no message appears in two splits, ignoring case, punctuation and spacing; near-paraphrases (token Jaccard ≥ 0.8) are counted, not removed.\n- **Isolated environment:** the '
         'separate Python environment Section 1 builds from the hash lock; every later cell runs there.\n\n## Conclusion (your notes)\n\nComplete these in your own '
-        "words; the labelled recorded values are in the **Check your reasoning** answers above.\n\n- On the 385 exposed-development-test queries the frozen embedder reached recall@1 "
-        "___ against the lexical baseline's ___ and the random floor's ___.\n- Two epochs of contrastive fine-tuning moved recall@1 to ___ and MRR to ___ "
+        "words; the labelled recorded values are in the **Check your reasoning** answers above.\n\n- On the fresh test (Section 8) the frozen MRR was ___ and the selected model's ___; the paired difference was ___ with a 95 % interval of "
+        "___ (queries) and ___ (intents) — or: not scored, because my run was exploratory (`settings_differing`: ___).\n- Secondary, on the 385 "
+        "exposed-development-test queries that chose the old default: recall@1 went from ___ (frozen) to ___ (adapted) against the lexical baseline's ___ "
         '(verdict: ___).\n- The number I would not trust on its own is ___, because ___.\n- Before adapting on my own pairs I would de-duplicate by ___, compare '
         'against ___, and use harder negatives such as ___.\n\n'
         "## References\n\n"
