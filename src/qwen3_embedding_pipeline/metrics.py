@@ -12,6 +12,7 @@ query — what a system with no model at all gets from shared words.
 
 from __future__ import annotations
 
+import random
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -88,3 +89,37 @@ def lexical_baseline(records: Sequence[Mapping[str, Any]], documents: Sequence[s
     result = retrieval_metrics(ranks, len(documents))
     result["baseline"] = "Jaccard overlap of lower-cased alphanumeric tokens between query and document"
     return result
+
+
+def paired_rank_comparison(
+    ranks_a: Sequence[int],
+    ranks_b: Sequence[int],
+    *,
+    n_resamples: int = 2_000,
+    seed: int = 0,
+    level: float = 0.95,
+) -> dict[str, Any]:
+    """Paired comparison of two systems on the same queries: the per-query reciprocal-rank difference (b -
+    a), its mean (the MRR difference), how many queries improved or got worse, and a paired bootstrap
+    percentile interval for the MRR difference (queries resampled with replacement, `n_resamples` times,
+    seeded)."""
+    if len(ranks_a) != len(ranks_b) or not ranks_a:
+        raise ValueError("paired comparison needs two equal-length, non-empty rank lists")
+    diffs = [1.0 / b - 1.0 / a for a, b in zip(ranks_a, ranks_b, strict=True)]
+    n = len(diffs)
+    rng = random.Random(seed)
+    means = sorted(sum(diffs[rng.randrange(n)] for _ in range(n)) / n for _ in range(n_resamples))
+    lo = means[int((1 - level) / 2 * n_resamples)]
+    hi = means[min(n_resamples - 1, int((1 + level) / 2 * n_resamples))]
+    return {
+        "n_queries": n,
+        "delta_mrr": sum(diffs) / n,
+        "ci": [lo, hi],
+        "ci_level": level,
+        "n_resamples": n_resamples,
+        "seed": seed,
+        "n_improved": sum(d > 0 for d in diffs),
+        "n_worse": sum(d < 0 for d in diffs),
+        "n_unchanged": sum(d == 0 for d in diffs),
+        "method": "paired bootstrap over queries of the reciprocal-rank difference (percentile interval)",
+    }

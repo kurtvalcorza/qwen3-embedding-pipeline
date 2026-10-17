@@ -20,6 +20,8 @@ TEMPLATE = {
     "notebook_name": "qwen3_embedding_colab.ipynb",
     "profile": "E2E",
     "mode": "GUIDED",
+    "notebook_kind": "TUTORIAL",
+    "use_notice": '> **⚠️ Notice.** For research, training and evaluation only. Not validated for production, clinical, diagnostic or safety-critical use. Running this notebook downloads third-party model weights and datasets under their own licenses (see the model card) and uses compute on your own Colab or Kaggle account. Data you bring stays in your runtime, and you are responsible for having the right to use it. Results here are tutorial evidence, not benchmarks. Everything is provided "as is", without warranty of any kind. To the maximum extent permitted by law, the maintainers and the DIMER platform accept no liability for its use. An embedding model returns vectors, not judgements: nearness is not relevance or correctness.',
     # SWP-R (2026-10-05 fleet sweep): nothing is pip-installed into the notebook kernel. The fleet's uv isolated-environment
     # mechanism (build_notebook.py/2.2): managed CPython, a size- and SHA-256-verified uv wheel, and a lock compiled from the
     # pyproject pins with `uv pip compile pyproject.toml --python-version 3.12 --python-platform x86_64-manylinux_2_28
@@ -39,16 +41,18 @@ TEMPLATE = {
         "installed into the notebook's own Python, so no restart is needed and Run all completes in one pass), stages and digest-verifies the "
         "pinned Qwen3-Embedding-0.6B snapshot (safetensors, 1.19 GB), fetches the two digest-pinned Banking77 CSV files "
         "from the project repository (1.1 MB, no credential), pairs every customer message with its intent phrase and draws "
-        "616 / 154 / 385 training, validation and test pairs balanced over the 77 intents from the release's own partition, "
-        "embeds three test queries and the 77 intent documents through the inference contract with an input manifest and a "
-        "rejection probe, scores the frozen embedder on the test queries by recall@1 / recall@5 / recall@10 and MRR over "
-        "the 77 documents beside the random floor and a lexical (token-overlap) baseline, runs a bounded contrastive "
-        "fine-tuning (InfoNCE with in-batch negatives) of the last two decoder layers with validation-MRR epoch "
-        "selection, scores the held-out split again, retrieves for the same three queries with the adapted embedder, "
+        "616 / 154 training and validation pairs and the 385-query exposed development test balanced over the 77 intents from the release's own partition, "
+        "builds the pinned 770-query fresh test from the test.csv messages this repository had never scored, "
+        "embeds three exposed-development-test queries and the 77 intent documents through the inference contract with an input manifest and a "
+        "rejection probe, scores the frozen embedder on the exposed development test and the validation split by recall@1 / recall@5 / recall@10 and MRR over "
+        "the 77 documents beside the random floor and a lexical (token-overlap) baseline, runs the pre-registered validation grid "
+        "(three learning-rate / layer configurations, selected by validation MRR), runs a bounded contrastive "
+        "fine-tuning (InfoNCE with in-batch negatives) of the selected configuration with validation-MRR epoch "
+        "selection, scores validation and the exposed development test again and, only under the pre-registered settings, the fresh test, retrieves for the same three queries with the adapted embedder, "
         "exports the adapter as safetensors with a manifest, and reloads that artifact into a fresh pipeline to verify "
-        "parity. The default path needs no repository clone, no DIMER worker or service, no credential, no upload dialog "
-        "and no configuration edit (NOTEBOOK_SPEC 2.2 §5). On CPU the whole path takes about four minutes of model time "
-        "after the downloads; a CUDA runtime is used automatically when present (bfloat16 there, float32 on CPU)."
+        "parity, then runs an optional transfer check on CLINC150 (not an MTEB task). The default path needs no repository clone, no DIMER worker or service, no credential, no upload dialog "
+        "and no configuration edit (NOTEBOOK_SPEC 2.2 §5). On CPU the whole path takes 20–40 minutes of model time "
+        "after the downloads (the grid trains three configurations); a T4 takes about 5–10; a CUDA runtime is used automatically when present (bfloat16 there, float32 on CPU)."
     ),
     "byod": (
         "After the tutorial workflow completes, set `USE_BYOD = True` in Section 4 and re-run from that cell to supply your own "
@@ -66,24 +70,25 @@ TEMPLATE = {
             '**Who this notebook is for.** The intended audience is a learner who knows basic Python, has used Colab or Jupyter, and wants to see how a '
             'text-embedding model turns messages into vectors, how retrieval quality is measured against honest floors, and what a bounded contrastive fine-tuning '
             'changes on a real labelled corpus. No prior experience with Qwen3, embeddings or contrastive learning is assumed; terms are explained where they first '
-            'matter and again in the **Glossary** at the end. CPU is adequate (about four minutes of model time); a GPU runtime is faster.\n\n**Input → Model → Output.**\n\n| '
+            'matter and again in the **Glossary** at the end. CPU works but is slow (20–40 minutes of model time, most of it the validation grid); a T4 GPU runtime takes about 5–10.\n\n**Input → Model → Output.**\n\n| '
             '| Embedding and retrieval | Bounded contrastive fine-tuning |\n|---|---|---|\n| Input | texts: queries (with a task instruction) or documents, up to '
-            '8,192 tokens | query–positive pairs: 616 / 154 / 385 Banking77 messages paired with their intent phrase, query-disjoint |\n| Model | the '
+            '8,192 tokens | query–positive pairs: 616 / 154 Banking77 messages for training and validation, plus a 385-query exposed development test and a 770-query fresh test, each paired with its intent phrase, query-disjoint |\n| Model | the '
             'Qwen3-Embedding-0.6B decoder, last-token pooled and L2-normalised | the same model; only the last two decoder layers train (31.5 M of 595.8 M '
             'parameters) with an InfoNCE loss and in-batch negatives |\n| Output | one unit-length 1024-number vector per text — no score; cosine ranks the 77 '
             'intent documents | recall@1/5/10 and MRR beside a random floor, a lexical baseline and the frozen model, and a 126 MB safetensors adapter that reloads '
             'with parity |\n\n**How to use this notebook.** Choose a runtime (CPU works; **Runtime → Change runtime type → T4 GPU** is faster), then **Runtime → Run '
             "all**. Run all completes in one pass: Section 1 installs nothing into the notebook's own Python, so no restart is needed. Sections 1–3 are "
             '**infrastructure** — the isolated environment, the carried package and the model snapshot — and their cells are collapsed; you may run them without '
-            'studying them. The learning path starts in Section 4. Form fields (`# @param`) are the only values meant to be edited, and the defaults reproduce the '
-            'recorded run. Before each principal result the notebook asks you to **Predict**; after it come **What to notice** and a collapsible **Check your '
-            'reasoning** with a worked answer from the recorded run (the Kaggle Tesla T4 run of 19 September 2026 recorded in `docs/release-verification.md`; on '
-            'CUDA the model runs in bfloat16, so your digits may differ slightly). Every adaptation starts from the pinned base, so re-running Section 7 with other '
+            'studying them. The learning path starts in Section 4. Form fields (`# @param`) are the only values meant to be edited, and the defaults are the '
+            'pre-registered settings (`docs/qwen3-embedding-preregistration.md`): changing one makes the run exploratory, and the notebook says so. Before each principal result the notebook asks you to **Predict**; after it come **What to notice** and a collapsible **Check your '
+            'reasoning** with a worked answer. Numbers in those answers are labelled with their source: the Colab CLI Tesla T4 run of 9 October 2026 of the previous blob `26a62b80` (identical '
+            'to the Kaggle T4 run of 19 September 2026, blob `f3475b93`), both recorded in `docs/release-verification.md` and not re-run for this revision; they '
+            'were measured on the 385 queries now called the exposed development test. On CUDA the model runs in bfloat16, so your digits may differ slightly. Every adaptation starts from the pinned base, so re-running Section 7 with other '
             'settings is a fresh experiment; Sections 5 and 6 put the pinned base back before they measure, so their numbers are always the frozen '
             'model\'s, and after re-running them you re-run Section 7 before Sections 8 and 9 (those two cells refuse to score the base as "adapted"). **Troubleshooting**, a **Glossary** and a **Conclusion** template are at the end. Writing your predictions down is optional.\n\n**Roadmap:** '
             '1–3 infrastructure → 4 the Banking77 corpus, validation and the split *(evaluation practice)* → 5 the embedding contract *(core concept: vectors, not '
-            'scores)* → 6 the random floor, the lexical baseline and the frozen model *(evaluation practice)* → 7 bounded contrastive fine-tuning *(core concept)* '
-            '→ 8 held-out evaluation *(evaluation practice)* → 9 retrieval before and after, export and fresh reload *(engineering)* → interpretation, '
+            'scores)* → 6 the random floor, the lexical baseline and the frozen model *(evaluation practice)* → 7 the pre-registered validation grid and bounded contrastive fine-tuning *(core concept)* '
+            '→ 8 evaluation: validation, the exposed development test and the fresh test *(evaluation practice)* → 9 retrieval before and after, export and fresh reload *(engineering)* → 10 an optional transfer check *(evaluation practice)* → interpretation, '
             'troubleshooting, glossary and your conclusion.'
         ],
     },
@@ -129,21 +134,31 @@ TEMPLATE = {
         "(Casanueva et al., 2020; CC BY 4.0) ships 13,083 customer-support messages labelled with 77 fine-grained banking "
         "intents as two digest-pinned CSV files fetched from the project repository at a pinned commit. Every intent name "
         "becomes a short **document** (`card_arrival` → `card arrival`) and every message a **query** whose positive is "
-        "its intent phrase, so nearest-neighbour retrieval over the 77 documents is intent detection — a task the embedder "
-        "was never tuned for, with documents that are two or three words long. The carried `metrics.py` ranks the "
+        "its intent phrase, so nearest-neighbour retrieval over the 77 documents is intent detection, with documents that are two or three words long.\n\n"
+        "**Training-data overlap (DAT9).** Banking77 is an MTEB classification task [6], and Qwen3-Embedding was evaluated on it: the upstream "
+        "`evaluation/task_prompts.json` carries a `Banking77Classification` prompt [2]. The technical report [1] neither lists nor excludes Banking77 "
+        "from its training mix, so whether this notebook's `train.csv` messages were in the model's training data is undisclosed. Read the frozen "
+        "number as possibly in-distribution, not zero-shot, and the adaptation gain as a gain over a model that may already be adapted to this "
+        "data. The optional transfer check in Section 10 compares the frozen and adapted models on CLINC150 [5], which is not an MTEB task.\n\n"
+        "**Pre-registered evaluation protocol (2026-10-17).** The learning rate and layer count of the old default were compared on the 385 seed-42 "
+        "test queries in 2026-09, so those queries are the **exposed development test**: shown every run, not independent evidence. The "
+        "configuration is now chosen on validation by a pre-registered rule (Section 7), and a pinned 770-query **fresh test** drawn from "
+        "messages this repository had never scored is read **only under the exact pre-registered settings**; see `docs/release-verification.md` "
+        "for the recorded evaluation and its reproductions. The carried `metrics.py` ranks the "
         "documents for every held-out query by cosine and reads the rank of its positive: **recall@1**, **recall@5**, "
         "**recall@10** and **MRR**; a **random floor** (1 / 77 recall@1) and a **lexical baseline** (Jaccard token "
         "overlap between message and phrase) frame the frozen number. The fine-tuning question is whether a bounded "
-        "contrastive adaptation of the last decoder layers on 616 pairs raises retrieval on messages the model has not "
-        "seen. Nothing here is a quality claim about your retrieval task: it is one seeded split of one corpus."
+        "contrastive adaptation of the last decoder layers on 616 pairs raises retrieval on messages that are not in this "
+        "notebook's training split. Nothing here is a quality claim about your retrieval task: it is one seeded split of one corpus."
     ),
     "learning_objectives": (
         "install the pinned runtime; read what the carried pipeline, dataset and metrics modules guarantee; stage and "
         "digest-verify the immutable upstream snapshot; fetch a digest-pinned real corpus and validate and split it "
         "with no message repeated across splits, and read the near-paraphrases that remain; embed queries and documents through the public API with the instruction contract and read "
         "the vector contract correctly; read recall@k and MRR beside a random floor and a lexical baseline and "
-        "understand what they do and do not measure; run a bounded contrastive fine-tuning with explicit "
-        "hyperparameters and validation-based epoch selection; evaluate on an independent test split; compare retrieved "
+        "understand what they do and do not measure; select a fine-tuning configuration on validation by a pre-registered rule and "
+        "run it with explicit hyperparameters and validation-based epoch selection; tell an exposed development test from a fresh "
+        "test scored only under the pre-registered settings; compare retrieved "
         "documents before and after; and export a safetensors adapter that reloads against the pinned base with "
         "verified parity."
     ),
@@ -159,7 +174,7 @@ TEMPLATE = {
         "- **Data contract:** records are `{id, query, positive}` — a query of 1..100,000 characters (text beyond 8,192 tokens is truncated and flagged at inference; queries and documents are truncated to 64 tokens **during training only**), a positive document of 1..1,000 characters, an optional `negative` document (added to the document set), ids matching `[A-Za-z0-9_.:-]{1,64}` and unique; a BYOD dataset needs 12..20,000 distinct queries (20 % go to test and 15 % to validation, and at least 8 must stay for training) and at least 2 distinct positives; queries are de-duplicated ignoring case, punctuation and spacing before splitting so the same message never sits in two splits, and near-paraphrases across splits (token Jaccard ≥ 0.8) are counted and reported, not removed. BYOD accepts CSV, JSON or JSONL in that shape.",
         "- **Validation is structural, not semantic:** nothing checks that a positive is relevant to its query or that the instruction describes the task — a mislabelled pair set is fine-tuned on without complaint.",
         "- **Privacy:** Do not upload confidential or restricted data to a hosted runtime unless you are authorized to process it there — an internal query log with its relevance labels is exactly that. The default path uploads nothing.",
-        "- **External access (data):** besides the Hub, the default path fetches two pinned objects (`train.csv` 839,073 bytes, `test.csv` 239,961 bytes; SHA-256 `b06e26ac…` / `d12d6e3b…`) from `raw.githubusercontent.com` at the pinned `PolyAI-LDN/task-specific-datasets` commit over HTTPS, each refused on any mismatch before it is read; Banking77 is CC BY 4.0 (Casanueva et al., 2020).",
+        "- **External access (data):** besides the Hub, the default path fetches two pinned objects (`train.csv` 839,073 bytes, `test.csv` 239,961 bytes; SHA-256 `b06e26ac…` / `d12d6e3b…`) from `raw.githubusercontent.com` at the pinned `PolyAI-LDN/task-specific-datasets` commit over HTTPS, each refused on any mismatch before it is read; Banking77 is CC BY 4.0 (Casanueva et al., 2020). The optional transfer check (Section 10, on by default) fetches one more pinned object, CLINC150 `data_full.json` (2,495,390 bytes, SHA-256 `36923c37…`, CC BY 3.0), from the pinned `clinc/oos-eval` commit.",
     ],
     "cells": [
         {
@@ -171,14 +186,18 @@ TEMPLATE = {
                 "`{{id, query, positive}}` pair whose positive is the intent name as words, drops repeated messages, and draws "
                 "8 training and 2 validation pairs per intent from the `train` member (disjoint messages) and 5 test pairs "
                 "per intent from the `test` member by a seeded shuffle — the release's own partition, balanced over all 77 "
-                "intents. `validate_dataset` then checks every record against the contract, `documents` lists the 77 "
+                "intents. Those 385 test pairs were used to compare configurations in 2026-09, so they are the **exposed development "
+                "test**. `build_fresh_test` then draws the pinned **fresh test**: 10 per intent from the `test` messages this repository had "
+                "never scored (not the 385, not the 154 of the semantic-search workshop, and no exact repeat of a `train` message), refused "
+                "unless its manifest SHA-256 matches the pin. It is built here and not scored until Section 8, and only under the pre-registered settings. `validate_dataset` then checks every record against the contract, `documents` lists the 77 "
                 "retrieval candidates, `check_split_disjoint` asserts no message appears in two splits (ignoring case, punctuation "
                 "and spacing), `near_duplicate_pairs` counts validation and test messages that are near-paraphrases of a message in "
                 "another split (token Jaccard ≥ 0.8) — reported, not refused — and the training "
                 "split is written to `outputs/{stem}_train.csv` in the shape BYOD expects. `INSTRUCTION` is the task "
                 "description every query carries in later cells.\n\n"
-                "Look for: 10,003 + 3,080 raw rows, two digests, splits 616 / 154 / 385, 77 documents, the near-duplicate "
-                "count (Banking77 has a few: the same complaint worded twice), and four refusal "
+                "Look for: 10,003 + 3,080 raw rows, two digests, splits 616 / 154 / 385, 77 documents, the fresh-test manifest (770 "
+                "queries, 516 exposed messages excluded, 22 exact repeats of training messages dropped), the near-duplicate "
+                "counts (Banking77 has a few: the same complaint worded twice), and four refusal "
                 "probes — a duplicate id, an empty query, a missing field and a dataset too small to split — each rejected "
                 "before `torch` does anything.\n\n"
                 "*Evaluation practice.* **Predict before running:** customer messages repeat. What would happen to the test numbers if "
@@ -195,28 +214,36 @@ TEMPLATE = {
                 "BYOD_PATH = ''  # @param {{type:\"string\"}}\n"
                 "\n"
                 "os.makedirs('outputs', exist_ok=True)\n"
+                "# DAT20: re-running this cell starts a new run; an earlier split is never left for later cells to read.\n"
+                "for _stale in ('splits', 'train_records', 'val_records', 'exposed_records', 'report_records', 'fresh', 'fresh_records', 'grid_selection', 'adapt_result', 'run_settings', 'preregistered'):\n"
+                "    globals().pop(_stale, None)\n"
                 "if USE_BYOD:\n"
-                "    if BYOD_PATH.strip():\n"
-                "        byod_path = Path(BYOD_PATH.strip()).expanduser()\n"
-                "        if not byod_path.is_file():\n"
-                "            raise FileNotFoundError(f'BYOD_PATH {{BYOD_PATH!r}} is not a file (relative paths start at {{Path.cwd()}}): give one .csv, .json, .jsonl file holding id, query and positive.')\n"
-                "        file_name = byod_path.name\n"
-                "    else:\n"
-                "        try:\n"
-                "            from google.colab import files\n"
-                "        except ImportError:\n"
-                "            raise RuntimeError('USE_BYOD is True but BYOD_PATH is empty, and the upload dialog exists only in Google Colab: on Kaggle or Jupyter put the file in the runtime and set BYOD_PATH to its path.') from None\n"
-                "        uploaded = files.upload() or {{}}\n"
-                "        if len(uploaded) != 1:\n"
-                "            raise ValueError(f'Upload exactly one file (received {{len(uploaded)}}; a cancelled dialog sends none): run this cell again.')\n"
-                "        file_name, payload = next(iter(uploaded.items()))\n"
-                "        if not file_name.lower().endswith(('.csv', '.json', '.jsonl')):\n"
-                "            raise ValueError(f'{{file_name}}: upload one .csv, .json, .jsonl file holding id, query and positive.')\n"
-                "        byod_path = Path('work') / file_name\n"
-                "        byod_path.parent.mkdir(parents=True, exist_ok=True)\n"
-                "        byod_path.write_bytes(payload)\n"
-                "    records = load_byod_dataset(byod_path)\n"
-                "    splits = split_dataset(records, seed=SPLIT_SEED)\n"
+                "    try:\n"
+                "        if BYOD_PATH.strip():\n"
+                "            byod_path = Path(BYOD_PATH.strip()).expanduser()\n"
+                "            if not byod_path.is_file():\n"
+                "                raise FileNotFoundError(f'BYOD_PATH {{BYOD_PATH!r}} is not a file (relative paths start at {{Path.cwd()}}): give one .csv, .json, .jsonl file holding id, query and positive.')\n"
+                "            file_name = byod_path.name\n"
+                "        else:\n"
+                "            try:\n"
+                "                from google.colab import files\n"
+                "            except ImportError:\n"
+                "                raise ValueError('USE_BYOD is True but BYOD_PATH is empty, and the upload dialog exists only in Google Colab: on Kaggle or Jupyter put the file in the runtime and set BYOD_PATH to its path.') from None\n"
+                "            uploaded = files.upload() or {{}}\n"
+                "            if len(uploaded) != 1:\n"
+                "                raise ValueError(f'Upload exactly one file (received {{len(uploaded)}}; a cancelled dialog sends none): run this cell again.')\n"
+                "            file_name, payload = next(iter(uploaded.items()))\n"
+                "            if not file_name.lower().endswith(('.csv', '.json', '.jsonl')):\n"
+                "                raise ValueError(f'{{file_name}}: upload one .csv, .json, .jsonl file holding id, query and positive.')\n"
+                "            byod_path = Path('work') / file_name\n"
+                "            byod_path.parent.mkdir(parents=True, exist_ok=True)\n"
+                "            byod_path.write_bytes(payload)\n"
+                "        records = load_byod_dataset(byod_path)\n"
+                "        splits = split_dataset(records, seed=SPLIT_SEED)\n"
+                "        for _name, _part in splits.items():\n"
+                "            validate_dataset(_part) if _name == 'train' else validate_dataset(_part, min_records=1)\n"
+                "    except (OSError, TypeError, ValueError, KeyError) as exc:\n"
+                "        raise DatasetRefused(f'BYOD refused: {{str(exc).rstrip(\".\")}}. Fix the file named here and run this cell again. Files already in outputs/ come from an earlier run and are not this run\\'s result.') from None\n"
                 "    data_source = 'BYOD (' + file_name + ')'\n"
                 "    raw_rows = {{'byod': len(records)}}\n"
                 "else:\n"
@@ -224,10 +251,21 @@ TEMPLATE = {
                 "    raw_rows = {{name: len(part) for name, part in corpus.items()}}\n"
                 "    splits = build_sample_dataset(corpus, seed=SPLIT_SEED)\n"
                 "    data_source = f'{{CORPUS_NAME}} ({{CORPUS_RELEASE}}; {{CORPUS_LICENSE}})'\n"
-                "train_records, val_records, test_records = splits['train'], splits['validation'], splits['test']\n"
+                "train_records, val_records, exposed_records = splits['train'], splits['validation'], splits['test']\n"
+                "# The exposed development test is defined for the Banking77 seed-42 draw only; elsewhere Sections 5, 6 and 8 report validation.\n"
+                "report_on_exposed = not USE_BYOD and SPLIT_SEED == SAMPLE_SEED\n"
+                "report_records = exposed_records if report_on_exposed else val_records\n"
+                "report_label = 'exposed development test' if report_on_exposed else 'validation (no exposed development test for this data)'\n"
+                "if not USE_BYOD:\n"
+                "    fresh = build_fresh_test(corpus, splits)\n"
+                "    fresh_records = fresh['records']\n"
+                "    check_split_disjoint({{'train': train_records, 'validation': val_records, 'fresh_test': fresh_records}})\n"
+                "else:\n"
+                "    fresh, fresh_records = None, []\n"
+
                 "# QEM-M3: the 8-record floor is the training floor; validation and test only need one record each.\n"
                 "dataset_manifests = {{name: validate_dataset(part) if name == 'train' else validate_dataset(part, min_records=1) for name, part in splits.items()}}\n"
-                "document_set = documents([*train_records, *val_records, *test_records])\n"
+                "document_set = documents([*train_records, *val_records, *exposed_records])\n"
                 "disjoint = check_split_disjoint(splits)\n"
                 "near_duplicates = near_duplicate_pairs(splits)\n"
                 "write_dataset_csv(train_records, 'outputs/{stem}_train.csv')\n"
@@ -235,6 +273,11 @@ TEMPLATE = {
                 "for name, manifest in dataset_manifests.items():\n"
                 "    print({{name: {{'n': manifest['n_records'], 'unique_queries': manifest['unique_queries'], 'n_documents': manifest['n_documents'], 'query_chars': manifest['query_chars'], 'digest': manifest['digest'][:16] + '...'}}}})\n"
                 "print({{'near_duplicates': near_duplicates['near_duplicates'], 'threshold_jaccard': near_duplicates['threshold'], 'reported_not_removed': True}})\n"
+                "if fresh is not None:\n"
+                "    print({{'fresh_test': {{k: v for k, v in fresh['manifest'].items() if k not in ('near_duplicates_vs_train_validation', 'source')}}, 'scored': 'only under the pre-registered settings, in Section 8'}})\n"
+                "    print({{'fresh_test_near_duplicates': {{k: v for k, v in fresh['manifest']['near_duplicates_vs_train_validation'].items() if k != 'examples'}}}})\n"
+                "print({{'reported_split': report_label}})\n"
+
                 "for example in near_duplicates['examples'][:2]:\n"
                 "    print({{'near_duplicate': example}})\n"
                 "print({{'example': train_records[0], 'documents': document_set[:6] + ['...']}})\n\n"
@@ -259,7 +302,7 @@ TEMPLATE = {
                 "`build_sample_dataset` drops repeated messages and draws training and validation from the release's `train` file and test from its `test` file; "
                 '`check_split_disjoint` then asserts no message sits in two splits, ignoring case, punctuation and spacing. That is an exact-repeat check: '
                 'paraphrases such as *Has my top-up been cancelled?* / *My top-up has been cancelled.* pass it, and `near_duplicate_pairs` counts them '
-                '(9 of the 385 test queries at token Jaccard ≥ 0.8 on this draw) so you can judge their weight — under 3 % here. The refusals (duplicate id, empty query, missing field, too small) stop before '
+                '(9 of the 385 exposed-development-test queries at token Jaccard ≥ 0.8 on this draw; the fresh test reports its own count) so you can judge their weight — under 3 % here. The refusals (duplicate id, empty query, missing field, too small) stop before '
                 '`torch` runs.</details>'
             ),
         },
@@ -273,7 +316,7 @@ TEMPLATE = {
                 "`MAX_BATCH`, the same batches `embed` receives) with the three "
                 "probe queries recorded under `query_manifest`, and a deliberately oversized batch is validated too and its "
                 "rejection recorded as a finding. `embed` returns one unit-norm 1024-d vector per text with `n_tokens` and "
-                "`truncated` flags; queries carry the instruction prefix, documents do not. The three test queries are "
+                "`truncated` flags; queries carry the instruction prefix, documents do not. Three queries of the reported split (the exposed development test on the default path) are "
                 "ranked against the 77 documents by cosine and their top-3 documents printed beside the gold intent — a "
                 "qualitative look before any metric is read; **cosine is a similarity, not a probability**, and no "
                 "threshold ships. The frozen top-3 lists are kept as the *before* column for Section 9. The cell first puts "
@@ -288,7 +331,7 @@ TEMPLATE = {
                 "restored_tensors = pipe.restore_base()\n"
                 "if restored_tensors:\n"
                 "    print({{'restored_pinned_base': len(restored_tensors), 'note': 'an earlier Section 7 had adapted the model; run Section 7 again before Sections 8 and 9'}})\n"
-                "probe_records = test_records[:3]\n"
+                "probe_records = report_records[:3]\n"
                 "probe_queries = [r['query'] for r in probe_records]\n"
                 "print({{'ceilings': {{'MAX_BATCH': MAX_BATCH, 'MAX_TEXT_TOKENS': MAX_TEXT_TOKENS, 'MAX_TEXT_CHARS': MAX_TEXT_CHARS, 'EMBEDDING_DIM': EMBEDDING_DIM, 'MAX_TRAIN_TOKENS': MAX_TRAIN_TOKENS, 'KINDS': KINDS}}}})\n"
                 "# QEM-m3: every document is validated, in the same MAX_BATCH batches embed receives, and the manifests merged.\n"
@@ -340,17 +383,17 @@ TEMPLATE = {
         },
         {
             "md": (
-                "## 6. The random floor, the lexical baseline and the frozen model on the test split\n\n"
+                "## 6. The random floor, the lexical baseline and the frozen model on the exposed development test\n\n"
                 "Three numbers frame the adaptation, all over the same 77-document set. The **random floor** is what a "
                 "uniformly random ranking achieves in expectation (recall@1 = 1 / 77, MRR ≈ 0.064). The **lexical "
                 "baseline** ranks the documents for each query by Jaccard overlap of lower-cased tokens — what a system "
                 "with no model gets from shared words such as *card* or *pin*. `pipe.evaluate` embeds the 77 documents "
-                "once and every test query with `INSTRUCTION`, ranks by cosine, and reads the rank of each query's own "
+                "once and every exposed-development-test query with `INSTRUCTION`, ranks by cosine, and reads the rank of each query's own "
                 "positive; ties are counted against the positive. Look for the frozen embedder well above both — the "
-                "build record saw recall@1 in the sixties and MRR in the seventies — and read `median_rank` beside the "
+                "previous blob's recorded runs saw recall@1 in the sixties and MRR in the seventies on these queries — and read `median_rank` beside the "
                 "means. About half a minute on CPU. Like Section 5, the cell puts the pinned base back first, so `frozen_model_test` "
-                "is always the pretrained model (`adapted: False`). Whether the frozen model beats the random floor is recorded "
-                "as a **verdict**; on your own pairs the run continues either way, while on the Banking77 sample a frozen model "
+                "is always the pretrained model (`adapted: False`). The frozen model is also scored on the 154 validation queries. Whether it beats the random floor **on validation** is recorded "
+                "as a **verdict** (a stop must never depend on a test number); on your own pairs the run continues either way, while on the Banking77 sample a frozen model "
                 "at or below the floor stops the cell, because that would mean a broken run.\n\n"
                 "*Evaluation practice.* **Predict before running:** the lexical baseline only counts shared words. How close will it get "
                 "to the frozen embedder on recall@1?"
@@ -363,35 +406,79 @@ TEMPLATE = {
                 "floor = random_floor(len(document_set))\n"
                 "print({{'random_floor': {{k: round(floor[k], 4) for k in ('recall@1', 'recall@5', 'recall@10', 'mrr')}}, 'baseline': floor['baseline']}})\n"
                 "t0 = time.perf_counter()\n"
-                "baseline_lexical = pipe.lexical_baseline(test_records, document_set)\n"
+                "baseline_lexical = pipe.lexical_baseline(report_records, document_set)\n"
                 "print({{'lexical_baseline': brief(baseline_lexical), 'baseline': baseline_lexical['baseline'], 'seconds': round(time.perf_counter() - t0, 1)}})\n"
                 "t0 = time.perf_counter()\n"
-                "frozen_test = pipe.evaluate(test_records, instruction=INSTRUCTION, candidates=document_set)\n"
-                "print({{'frozen_model_test': brief(frozen_test), 'n_queries': frozen_test['n_queries'], 'n_documents': frozen_test['n_documents'], 'verdict': frozen_test['verdict'], 'adapted': frozen_test['adapted'], 'seconds': round(time.perf_counter() - t0, 1)}})\n"
-                "print({{'definitions': frozen_test['definitions']}})\n"
+                "frozen_report = pipe.evaluate(report_records, instruction=INSTRUCTION, candidates=document_set)\n"
+                "print({{'frozen_model': brief(frozen_report), 'split': report_label, 'n_queries': frozen_report['n_queries'], 'n_documents': frozen_report['n_documents'], 'verdict': frozen_report['verdict'], 'adapted': frozen_report['adapted'], 'seconds': round(time.perf_counter() - t0, 1)}})\n"
+                "val_documents = documents(val_records)\n"
+                "frozen_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)\n"
+                "val_floor = random_floor(len(val_documents))\n"
+                "print({{'frozen_model_validation': brief(frozen_val), 'random_floor_validation_mrr': round(val_floor['mrr'], 4)}})\n"
+                "print({{'definitions': frozen_report['definitions']}})\n"
+
                 "# Contract integrity: both systems ranked the same document set.\n"
-                "if frozen_test['n_documents'] != baseline_lexical['n_documents']:\n"
-                "    raise RuntimeError(f\"contract: the frozen model ranked {{frozen_test['n_documents']}} documents, the lexical baseline {{baseline_lexical['n_documents']}}\")\n"
+                "if frozen_report['n_documents'] != baseline_lexical['n_documents']:\n"
+                "    raise RuntimeError(f\"contract: the frozen model ranked {{frozen_report['n_documents']}} documents, the lexical baseline {{baseline_lexical['n_documents']}}\")\n"
                 "# SWP-A: the quality comparison is a recorded verdict, not an assert, so a BYOD run still reaches adaptation and export.\n"
-                "frozen_vs_floor = 'above' if frozen_test['mrr'] > floor['mrr'] else 'not above'\n"
+                "# DOC11: the stop reads validation, never a test split.\n"
+                "frozen_vs_floor = 'above' if frozen_val['mrr'] > val_floor['mrr'] else 'not above'\n"
                 "print({{'verdict_frozen_vs_random_floor_mrr': frozen_vs_floor}})\n"
                 "if not USE_BYOD and frozen_vs_floor != 'above':\n"
-                "    raise RuntimeError(f\"On the Banking77 sample the frozen model must rank above the random floor (MRR {{frozen_test['mrr']:.4f}} vs {{floor['mrr']:.4f}}): the snapshot or the corpus is not the pinned one. Run all again from the top.\")"
+                "    raise RuntimeError(f\"On the Banking77 sample the frozen model must rank above the random floor on validation (MRR {{frozen_val['mrr']:.4f}} vs {{val_floor['mrr']:.4f}}): the snapshot or the corpus is not the pinned one. Run all again from the top.\")"
             ),
         },
         {
             "md": (
                 '**What to notice:** the three systems on recall@1/5/10 and MRR, `median_rank`, and the verdict line.\n\n<details><summary>Check your '
-                'reasoning</summary>Not close. In the recorded run recall@1 was 0.013 for the random floor, 0.3065 for the lexical baseline and 0.6312 for the frozen '
+                'reasoning</summary>Not close. On these 385 queries, in the Colab CLI T4 run of 9 October 2026 (previous blob `26a62b80`; not re-run for this revision), recall@1 was 0.013 for the random floor, 0.3065 for the lexical baseline and 0.6312 for the frozen '
                 'embedder (MRR 0.064 / 0.4159 / 0.741; median rank 5 for lexical, 1 for frozen). Shared words such as *card* get the lexical baseline a third of the '
                 'way; the frozen embedder already understands paraphrase. A lexical baseline near the model would mean the task is mostly keyword matching.</details>'
             ),
         },
         {
             "md": (
-                "## 7. Bounded contrastive fine-tuning\n\n"
-                "`pipe.adapt` trains only the last `TRAINABLE_LAYERS` decoder layers — two by default, "
-                "31,461,888 of 595,776,512 parameters; the token embeddings, the earlier layers and the final norm stay "
+                "## 7. Bounded contrastive fine-tuning, configured on validation\n\n**7a. The pre-registered validation grid.** The learning rate and the number of trainable layers are chosen here, on the 154 validation queries only, by a rule written down before any run (`docs/qwen3-embedding-preregistration.md`). Three configurations are trained with every other setting fixed (2 epochs, batch 16, temperature 0.05, seed 0): **C0** 2 layers at 5e-5 (the previous default), **C1** 2 layers at 2e-5 and **C2** 4 layers at 2e-5. Each is scored by its best-epoch validation MRR. `select_configuration` keeps C0 unless a challenger beats it by at least **0.02** (a predeclared practical tolerance, not a significance test); C2, which doubles the adapter, must also beat the best 2-layer configuration by 0.02; and the frozen model is kept unless the selected configuration beats the frozen validation MRR by 0.02. Every configuration starts from the pinned base, and the grid never reads a test split. It takes a few minutes on a T4 (each configuration about as long as the training cell below) and is on by default (`RUN_GRID`). With `RUN_GRID = False` the training cell uses C0, and the run is exploratory because no selection was made in this session.\n\n**Predict before running:** C0's learning rate is two and a half times C1's. Will either challenger clear a 0.02 margin on validation MRR?"
+            ),
+            "code": (
+                "RUN_GRID = True  # @param {{type:\"boolean\"}}\n"
+                "\n"
+                "def grid_report(entry):\n"
+                "    if entry.get('val'):\n"
+                "        print({{'epoch': entry['epoch'], 'val_recall@1': round(entry['val']['recall@1'], 4), 'val_mrr': round(entry['val']['mrr'], 4)}})\n"
+                "\n"
+                "grid_selection = None\n"
+                "if RUN_GRID:\n"
+                "    grid_rows = {{}}\n"
+                "    t0 = time.perf_counter()\n"
+                "    for name, config in GRID_CONFIGS.items():\n"
+                "        print({{'config': name, **config}})\n"
+                "        result = pipe.adapt(train_records, val_records, instruction=INSTRUCTION, epochs=PREREGISTERED_SETTINGS['epochs'], lr=config['lr'], batch_size=PREREGISTERED_SETTINGS['batch_size'], trainable_layers=config['trainable_layers'], temperature=PREREGISTERED_SETTINGS['temperature'], seed=PREREGISTERED_SETTINGS['adapt_seed'], progress=grid_report)\n"
+                "        best = result['history'][result['best_epoch']]['val']\n"
+                "        grid_rows[name] = {{**config, 'best_epoch': result['best_epoch'], 'val_recall@1': best['recall@1'], 'val_mrr': best['mrr'], 'frozen_val_mrr': result['history'][0]['val']['mrr']}}\n"
+                "    pipe.restore_base()\n"
+                "    grid_seconds = round(time.perf_counter() - t0, 1)\n"
+                "    grid_selection = select_configuration({{name: row['val_mrr'] for name, row in grid_rows.items()}}, grid_rows['C0']['frozen_val_mrr'])\n"
+                "    for name, row in grid_rows.items():\n"
+                "        print({{name: {{k: round(v, 4) if isinstance(v, float) else v for k, v in row.items()}}}})\n"
+                "    print({{'selection': {{k: grid_selection[k] for k in ('config', 'settings', 'reason', 'selected_model')}}, 'margin': grid_selection['margin'], 'seconds': grid_seconds}})\n"
+                "    grid_tag = '' if (report_on_exposed and INSTRUCTION == DEFAULT_INSTRUCTION) else '_exploratory'\n"
+                "    with open(f'outputs/{stem}_grid_validation{{grid_tag}}.json', 'w', encoding='utf-8') as handle:\n"
+                "        json.dump({{'test_look': 'not scored (selection-only)', 'data_source': data_source, 'instruction': INSTRUCTION, 'rows': grid_rows, 'selection': grid_selection, 'seconds': grid_seconds, 'repository_revision': NOTEBOOK_SOURCE['repository_revision']}}, handle, indent=2, ensure_ascii=False)\n"
+                "else:\n"
+                "    print({{'grid': 'not run', 'consequence': 'the training cell uses C0 and this run is exploratory (no pre-registered selection in this session)'}})"
+            ),
+        },
+        {
+            "md": (
+                '**What to notice:** each configuration\'s epoch 0 (the same frozen validation MRR every time), its best epoch, the three best-epoch validation MRRs side by side, and which rule decided the `selection`.\n\n<details><summary>Check your reasoning</summary>The grid prints the answer for this run; there is no recorded hosted grid yet for this revision (`docs/release-verification.md` will carry it). What matters is the procedure: the choice is made on validation by a rule fixed in advance, and a difference smaller than the margin keeps the smaller, current configuration rather than chasing noise.</details>'
+            ),
+        },
+        {
+            "md": (
+                "### 7b. Train the selected configuration\n\n"
+                "`pipe.adapt` trains only the last `TRAINABLE_LAYERS` decoder layers — two for C0 and C1 "
+                "(31,461,888 of 595,776,512 parameters), four for C2; the token embeddings, the earlier layers and the final norm stay "
                 "frozen — with an **InfoNCE** loss: each batch embeds its queries (with `INSTRUCTION`) and the unique "
                 "documents among its positives in one forward pass, and every query must pick its own positive out of the "
                 "batch's documents by cosine at `TEMPERATURE` — the other queries' positives are the negatives. AdamW at a "
@@ -400,7 +487,9 @@ TEMPLATE = {
                 "metrics over the validation document set; every epoch is scored the same way, and the epoch with the "
                 "highest validation MRR is kept.\n\n"
                 "Watch validation recall@1 climb by ten points or so over two epochs while recall@5 passes 95 % (about "
-                "47 s of training plus a validation pass per epoch on CPU). The CPU float32 build record's sweep on this sample (held-out recall@1): two layers at 2e-5 reached 77.1 %, four layers at 2e-5 82.1 % with a 252 MB adapter, two layers at 5e-5 80.3 % with a 126 MB adapter — the default. On a CUDA GPU the model runs in bfloat16: the recorded Kaggle Tesla T4 run of the default reached 76.6 %, so expect the high seventies to low eighties depending on the device. "
+                "47 s of training plus a validation pass per epoch on CPU; these are the previous blob's recorded runs). `LEARNING_RATE = 0` and `TRAINABLE_LAYERS = 0` "
+                "mean *use the grid's selection*; any other value, like any other change to these fields, makes the run exploratory, and Section 8 "
+                "then reads validation and the exposed development test only. The cell prints `preregistered` and the `settings_differing` list. "
                 "Every call starts from the pinned base (`started_from` in the printed result), so a re-run with other settings is a "
                 "fresh experiment, not continued training, and epoch 0 is always the frozen model.\n\n"
                 "**Predict before running:** with a batch of 16, each query's negatives are the other 15 queries' intent phrases. Will "
@@ -408,12 +497,15 @@ TEMPLATE = {
             ),
             "code": (
                 "EPOCHS = 2  # @param {{type:\"integer\"}}\n"
-                "LEARNING_RATE = 5e-5  # @param {{type:\"number\"}}\n"
+                "LEARNING_RATE = 0.0  # @param {{type:\"number\"}}\n"
                 "BATCH_SIZE = 16  # @param {{type:\"integer\"}}\n"
-                "TRAINABLE_LAYERS = 2  # @param {{type:\"integer\"}}\n"
+                "TRAINABLE_LAYERS = 0  # @param {{type:\"integer\"}}\n"
                 "TEMPERATURE = 0.05  # @param {{type:\"number\"}}\n"
-                "# The recorded defaults; Section 8 holds the Banking77 sample to an improvement only at these settings.\n"
-                "DEFAULT_SETTINGS = (EPOCHS, LEARNING_RATE, BATCH_SIZE, TRAINABLE_LAYERS, TEMPERATURE) == (2, 5e-5, 16, 2, 0.05)\n\n"
+                "ADAPT_SEED = 0\n"
+                "# 0 = the configuration the Section 7a grid selected (C0 when the grid did not run in this session).\n"
+                "chosen = grid_selection['settings'] if globals().get('grid_selection') else GRID_CONFIGS['C0']\n"
+                "lr = LEARNING_RATE or chosen['lr']\n"
+                "layers = TRAINABLE_LAYERS or chosen['trainable_layers']\n\n"
                 "def report(entry):\n"
                 "    row = {{'epoch': entry['epoch'], 'train_loss': None if entry['train_loss'] is None else round(entry['train_loss'], 4)}}\n"
                 "    if entry.get('val'):\n"
@@ -424,30 +516,57 @@ TEMPLATE = {
                 "        row['note'] = entry['note']\n"
                 "    print(row)\n\n"
                 "t0 = time.perf_counter()\n"
-                "adapt_result = pipe.adapt(train_records, val_records, instruction=INSTRUCTION, epochs=EPOCHS, lr=LEARNING_RATE, batch_size=BATCH_SIZE, trainable_layers=TRAINABLE_LAYERS, temperature=TEMPERATURE, progress=report)\n"
+                "adapt_result = pipe.adapt(train_records, val_records, instruction=INSTRUCTION, epochs=EPOCHS, lr=lr, batch_size=BATCH_SIZE, trainable_layers=layers, temperature=TEMPERATURE, seed=ADAPT_SEED, progress=report)\n"
                 "adapt_seconds = round(time.perf_counter() - t0, 1)\n"
-                "print({{'objective': adapt_result['objective'], 'trainable_parameters': adapt_result['n_trainable'], 'total_parameters': adapt_result['n_total'], 'train_documents': adapt_result['n_train_documents'], 'best_epoch': adapt_result['best_epoch'], 'selection': adapt_result['selection'], 'started_from': adapt_result['started_from'], 'seconds': adapt_seconds}})"
+                "print({{'objective': adapt_result['objective'], 'trainable_parameters': adapt_result['n_trainable'], 'total_parameters': adapt_result['n_total'], 'train_documents': adapt_result['n_train_documents'], 'best_epoch': adapt_result['best_epoch'], 'selection': adapt_result['selection'], 'started_from': adapt_result['started_from'], 'seconds': adapt_seconds}})\n"
+                "# SCORE_ONCE: `preregistered` is computed from every pre-registered setting, never from one field.\n"
+                "run_settings = {{\n"
+                "    'data_source': PREREGISTERED_SETTINGS['data_source'] if not USE_BYOD else data_source,\n"
+                "    'split_seed': SPLIT_SEED,\n"
+                "    'sizes': {{'train': len(train_records), 'validation': len(val_records), 'exposed_development_test': len(exposed_records), 'fresh_test': len(fresh_records)}},\n"
+                "    'fresh_test_sha256': fresh['manifest']['manifest_sha256'] if fresh else None,\n"
+                "    'instruction': INSTRUCTION,\n"
+                "    'epochs': EPOCHS,\n"
+                "    'batch_size': BATCH_SIZE,\n"
+                "    'temperature': TEMPERATURE,\n"
+                "    'max_train_tokens': adapt_result['max_train_tokens'],\n"
+                "    'adapt_seed': ADAPT_SEED,\n"
+                "    'optimizer': PREREGISTERED_SETTINGS['optimizer'],\n"
+                "    'epoch_selection': adapt_result['selection'],\n"
+                "    'grid': PREREGISTERED_SETTINGS['grid'] if globals().get('grid_selection') else 'not run',\n"
+                "    'configuration': {{'trainable_layers': layers, 'lr': lr}},\n"
+                "}}\n"
+                "settings_differing = preregistration_diff(run_settings, globals().get('grid_selection'))\n"
+                "preregistered = not settings_differing\n"
+                "print({{'configuration': run_settings['configuration'], 'preregistered': preregistered, 'settings_differing': settings_differing}})\n"
+                "if not preregistered:\n"
+                "    print({{'exploratory_run': 'Section 8 will read validation and the exposed development test only; the fresh test is not scored for this run'}})"
             ),
         },
         {
             "md": (
                 '**What to notice:** epoch 0 (`note: frozen model`), the training loss, `val_recall@1` and `val_mrr` per epoch, `best_epoch`, and `started_from`.\n\n<details><summary>Check '
-                "your reasoning</summary>Yes. Validation recall@1 climbs by about ten points over two epochs while recall@5 passes 95 %; the build record's sweep shows "
-                'more layers buy a little more at twice the adapter size. In-batch negatives are cheap — no mining — but they are easy ones; a real corpus with '
+                "your reasoning</summary>Yes. In the previous blob's recorded runs validation recall@1 climbed by about ten points over two epochs while recall@5 passed 95 %; the grid's C2 row shows "
+                'what two more layers buy on validation at twice the adapter size. In-batch negatives are cheap — no mining — but they are easy ones; a real corpus with '
                 'near-duplicate documents needs harder negatives.</details>'
             ),
         },
         {
             "md": (
-                "## 8. Held-out evaluation\n\n"
-                "The test split was never used for training or epoch selection, and no message in it appears in the "
-                "training or validation splits. The adapted embedder is scored exactly as the frozen one was in Section 6 "
-                "— same queries, same 77 documents, same instruction — and the four rows are put side by side. Look for "
-                "recall@1 up by ten points or more and MRR up by about a tenth; the cell records whether the adapted MRR is above the "
-                "frozen MRR as a **verdict** (`improved`, `no change` or `worse`) in the report and `result.json` instead of asserting it, "
-                "so a run on your own pairs that does not improve still exports and reloads; on the Banking77 sample at the "
-                "default settings a result that is not *improved* stops the cell, because the recorded runs all improved. "
-                "The cell refuses to run if the pipeline holds the pinned base (Section 5 or 6 re-run after Section 7). 385 queries from one seeded split of one corpus give no dispersion estimate; the deltas are "
+                "## 8. Evaluation: validation, the exposed development test and the fresh test\n\n"
+                "**Pre-registered evaluation protocol (2026-10-17).** No message in any evaluated split repeats a training message (ignoring case, punctuation and spacing). The adapted "
+                "embedder is scored exactly as the frozen one was in Section 6 (same queries, same 77 documents, same instruction) on validation "
+                "and on the **exposed development test**, which is shown every run for continuity and is not independent evidence. The **fresh "
+                "test** (770 queries) is scored **only under the exact pre-registered settings**: `preregistered` comes from every one of them, "
+                "including the grid's selection. Any other setting (a changed form field, your own data, the Activity) is exploratory: the cell "
+                "says so, reads validation and the exposed development test only, and writes `*_exploratory_<n>` files instead of the "
+                "pre-registered report. A pre-registered scoring is labelled `pre-registered evaluation (this runtime)` the first time in a runtime "
+                "and `reproduction` after that; see `docs/release-verification.md` for the recorded evaluation and its reproductions. On the fresh "
+                "test the cell prints the paired comparison: each query's reciprocal rank under both models, the MRR difference, how many queries "
+                "improved or got worse, and a paired bootstrap 95 % interval. The stop that keeps a broken run from exporting reads **validation**: on "
+                "the Banking77 sample under the pre-registered settings an adapted validation MRR that is not above the frozen one stops the cell; "
+                "results on the fresh test are verdicts only, never stops. "
+                "The cell refuses to run if the pipeline holds the pinned base (Section 5 or 6 re-run after Section 7). The bootstrap interval covers query sampling only, not seed-to-seed variation, and everything here is one seeded split of one corpus; the deltas are "
                 "sample-sanity evidence that the adaptation contract works, not a benchmark, and a gain on Banking77 "
                 "intents says nothing about your retrieval task until you measure it there.\n\n"
                 "*Evaluation practice.* **Predict before running:** which will gain more from fine-tuning — recall@1 or recall@10 — and why?"
@@ -455,22 +574,61 @@ TEMPLATE = {
             "code": (
                 "if pipe.adapter is None:  # QEM-M2: never score the pinned base as 'adapted'\n"
                 "    raise RuntimeError('The pipeline holds the pinned base, not an adapted model (Section 5 or 6 was re-run after Section 7 and put the base back): run Section 7, then this cell.')\n"
-                "adapted_test = pipe.evaluate(test_records, instruction=INSTRUCTION, candidates=document_set)\n"
-                "adapted_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=documents(val_records))\n"
+                "adapted_report = pipe.evaluate(report_records, instruction=INSTRUCTION, candidates=document_set)\n"
+                "adapted_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)\n"
                 "comparison = {{\n"
-                "    metric: {{'random_floor': round(floor[metric], 4), 'lexical': round(baseline_lexical[metric], 4), 'frozen': round(frozen_test[metric], 4), 'adapted': round(adapted_test[metric], 4)}}\n"
+                "    metric: {{'random_floor': round(floor[metric], 4), 'lexical': round(baseline_lexical[metric], 4), 'frozen': round(frozen_report[metric], 4), 'adapted': round(adapted_report[metric], 4)}}\n"
                 "    for metric in ('recall@1', 'recall@5', 'recall@10', 'mrr')\n"
                 "}}\n"
-                "comparison['median_rank'] = {{'lexical': baseline_lexical['median_rank'], 'frozen': frozen_test['median_rank'], 'adapted': adapted_test['median_rank']}}\n"
-                "comparison['delta_vs_frozen'] = {{metric: round(adapted_test[metric] - frozen_test[metric], 4) for metric in ('recall@1', 'recall@5', 'recall@10', 'mrr')}}\n"
-                "delta_mrr = adapted_test['mrr'] - frozen_test['mrr']\n"
-                "# SWP-A: the direction is a recorded verdict, not an assert, so a BYOD run always reaches export, reload and result.json.\n"
-                "comparison['verdict'] = {{'adapted_vs_frozen_mrr': 'improved' if delta_mrr > 0 else ('no change' if delta_mrr == 0 else 'worse'), 'frozen_vs_random_floor_mrr': frozen_vs_floor}}\n"
+                "comparison['split'] = report_label\n"
+                "comparison['median_rank'] = {{'lexical': baseline_lexical['median_rank'], 'frozen': frozen_report['median_rank'], 'adapted': adapted_report['median_rank']}}\n"
+                "comparison['delta_vs_frozen'] = {{metric: round(adapted_report[metric] - frozen_report[metric], 4) for metric in ('recall@1', 'recall@5', 'recall@10', 'mrr')}}\n"
+                "comparison['validation_mrr'] = {{'frozen': round(frozen_val['mrr'], 4), 'adapted': round(adapted_val['mrr'], 4)}}\n"
+                "\n"
+                "def direction(delta):\n"
+                "    return 'improved' if delta > 0 else ('no change' if delta == 0 else 'worse')\n"
+                "\n"
+                "delta_mrr = adapted_report['mrr'] - frozen_report['mrr']\n"
+                "delta_val_mrr = adapted_val['mrr'] - frozen_val['mrr']\n"
+                "# SWP-A: the directions are recorded verdicts, so a BYOD or exploratory run always reaches export, reload and result.json.\n"
+                "comparison['verdict'] = {{'adapted_vs_frozen_mrr': direction(delta_mrr), 'adapted_vs_frozen_validation_mrr': direction(delta_val_mrr), 'frozen_vs_random_floor_validation_mrr': frozen_vs_floor}}\n"
                 "for metric, row in comparison.items():\n"
                 "    print({{metric: row}})\n"
-                "if not USE_BYOD and DEFAULT_SETTINGS and comparison['verdict']['adapted_vs_frozen_mrr'] != 'improved':\n"
-                "    raise RuntimeError(f\"On the Banking77 sample at the default settings the adapted MRR must be above the frozen MRR ({{adapted_test['mrr']:.4f}} vs {{frozen_test['mrr']:.4f}}): Run all again from the top; if it repeats, report it.\")"
+                "# DOC11: the stop reads validation, never a test split.\n"
+                "if not USE_BYOD and preregistered and comparison['verdict']['adapted_vs_frozen_validation_mrr'] != 'improved':\n"
+                "    raise RuntimeError(f\"On the Banking77 sample under the pre-registered settings the adapted validation MRR must be above the frozen validation MRR ({{adapted_val['mrr']:.4f}} vs {{frozen_val['mrr']:.4f}}): Run all again from the top; if it repeats, report it.\")\n"
                 "\n"
+                "# SCORE_ONCE: the fresh test is read only under the pre-registered settings.\n"
+                "fresh_looks = globals().get('fresh_looks', 0)\n"
+                "exploratory_runs = globals().get('exploratory_runs', 0)\n"
+                "look = test_look(preregistered, fresh_looks)\n"
+                "fresh_result = None\n"
+                "if preregistered:\n"
+                "    keep_frozen = grid_selection['keep_frozen']\n"
+                "    frozen_fresh = pipe.evaluate_base(fresh_records, instruction=INSTRUCTION, candidates=document_set)\n"
+                "    adapted_fresh = None if keep_frozen else pipe.evaluate(fresh_records, instruction=INSTRUCTION, candidates=document_set)\n"
+                "    fresh_result = {{\n"
+                "        'test_look': look,\n"
+                "        'selected_model': grid_selection['selected_model'],\n"
+                "        'n_queries': frozen_fresh['n_queries'],\n"
+                "        'frozen': brief(frozen_fresh),\n"
+                "        'adapted': brief(adapted_fresh) if adapted_fresh else None,\n"
+                "        'paired_mrr': paired_rank_comparison(frozen_fresh['ranks'], adapted_fresh['ranks']) if adapted_fresh else None,\n"
+                "        'manifest_sha256': fresh['manifest']['manifest_sha256'],\n"
+                "    }}\n"
+                "    if adapted_fresh:\n"
+                "        fresh_result['verdict'] = direction(adapted_fresh['mrr'] - frozen_fresh['mrr'])\n"
+                "    fresh_looks += 1\n"
+                "    run_tag = '' if fresh_looks == 1 and look != 'reproduction' else f'_reproduction_{{fresh_looks}}'\n"
+                "    print({{'fresh_test': {{k: v for k, v in fresh_result.items() if k != 'paired_mrr'}}}})\n"
+                "    if fresh_result['paired_mrr']:\n"
+                "        paired = fresh_result['paired_mrr']\n"
+                "        print({{'fresh_test_paired_mrr': {{'delta': round(paired['delta_mrr'], 4), 'ci95': [round(x, 4) for x in paired['ci']], 'improved': paired['n_improved'], 'worse': paired['n_worse'], 'unchanged': paired['n_unchanged']}}}})\n"
+                "    print({{'test_look': look, 'note': 'a runtime cannot know about other runtimes; docs/release-verification.md names the evaluation of record'}})\n"
+                "else:\n"
+                "    exploratory_runs += 1\n"
+                "    run_tag = f'_exploratory_{{exploratory_runs}}'\n"
+                "    print({{'test_look': look, 'settings_differing': settings_differing, 'note': 'exploratory: validation and the exposed development test only; the fresh test was not read'}})\n"
                 "evaluation_report_payload = {{\n"
                 "    'model': {{'id': MODEL_ID, 'revision': MODEL_REVISION, 'key': MODEL_KEY}},\n"
                 "    'data_source': data_source,\n"
@@ -480,31 +638,41 @@ TEMPLATE = {
                 "    'near_duplicates': near_duplicates,\n"
                 "    'n_documents': len(document_set),\n"
                 "    'baselines': {{'random_floor': floor, 'lexical': baseline_lexical}},\n"
-                "    'frozen_test': frozen_test,\n"
+                "    'test_look': look,\n"
+                "    'preregistered': preregistered,\n"
+                "    'settings_differing': settings_differing,\n"
+                "    'run_settings': run_settings,\n"
+                "    'grid_selection': globals().get('grid_selection'),\n"
+                "    'reported_split': report_label,\n"
+                "    'frozen_reported_split': frozen_report,\n"
+                "    'frozen_validation': frozen_val,\n"
+                "    'fresh_test': fresh_result,\n"
+                "    'fresh_test_manifest': fresh['manifest'] if fresh else None,\n"
                 "    'validation_metrics': adapted_val,\n"
-                "    'test_metrics': adapted_test,\n"
+                "    'reported_split_metrics': adapted_report,\n"
                 "    'comparison': comparison,\n"
                 "    'adaptation': {{k: v for k, v in adapt_result.items() if k not in ('history', 'trainable_names')}},\n"
                 "    'history': adapt_result['history'],\n"
                 "    'adaptation_seconds': adapt_seconds,\n"
                 "}}\n"
-                "with open('outputs/{stem}_evaluation_report.json', 'w', encoding='utf-8') as f:\n"
+                "report_path = f'outputs/{stem}_evaluation_report{{run_tag}}.json'\n"
+                "with open(report_path, 'w', encoding='utf-8') as f:\n"
                 "    json.dump(evaluation_report_payload, f, indent=2, ensure_ascii=False)\n"
-                "print({{'report': 'outputs/{stem}_evaluation_report.json'}})"
+                "print({{'report': report_path}})"
             ),
         },
         {
             "md": (
                 '**What to notice:** the four rows side by side, `delta_vs_frozen`, `median_rank`, and the `verdict`.\n\n<details><summary>Check your '
-                'reasoning</summary>Recall@1. In the recorded run recall@1 rose 0.6312 → 0.7662 (+0.135) but recall@10 only 0.9377 → 0.9896 (+0.052): the frozen model '
-                'already had the right intent near the top, and fine-tuning mostly moved it to first place. MRR went 0.741 → 0.8498 and the verdict was *improved*. One '
-                'seeded split of 385 queries has no dispersion estimate.</details>'
+                'reasoning</summary>Recall@1. On the exposed development test, in the Colab CLI T4 run of 9 October 2026 (previous blob `26a62b80`; not re-run for this revision), recall@1 rose 0.6312 → 0.7662 (+0.135) but recall@10 only 0.9377 → 0.9896 (+0.052): the frozen model '
+                'already had the right intent near the top, and fine-tuning mostly moved it to first place. MRR went 0.741 → 0.8498 and the verdict was *improved*. Those queries '
+                'had been used to choose the old default, so read the fresh-test row and its interval for this revision; its recorded value is in `docs/release-verification.md` once the hosted run exists.</details>'
             ),
         },
         {
             "md": (
                 "## 9. Retrieve before and after, export the adapter and reload it\n\n"
-                "The three test queries embedded by the frozen model in Section 5 are embedded again by the adapted model "
+                "The three queries embedded by the frozen model in Section 5 are embedded again by the adapted model "
                 "through the same `embed` contract, ranked against the re-embedded 77 documents, and their top-3 lists "
                 "printed side by side with the gold intent. Read them as observations: the metric is Section 8, and the "
                 "adapter moves the last decoder layers so **every vector changes** — each document's cosine to its frozen "
@@ -518,7 +686,7 @@ TEMPLATE = {
                 "`Qwen3EmbeddingPipeline.from_artifact` re-verifies the base snapshot, checks the artifact manifest and "
                 "digest **before** deserialising, refuses any tensor that is not a decoder-layer tensor of the base, and "
                 "overlays the tensors onto a freshly loaded base — a new object from files, not the in-memory model (VER2). "
-                "The cell asserts identical query vectors and an identical test MRR (VER4)."
+                "The cell asserts identical query vectors and an identical validation MRR (VER4). Files of an exploratory run carry its `_exploratory_<n>` tag, so they never replace the pre-registered run's."
             ),
             "code": (
                 "import csv\n"
@@ -538,22 +706,23 @@ TEMPLATE = {
                 "document_shift = {{'self_cosine_min': round(float(np.min(np.sum(doc_vectors * doc_vectors_after, axis=1))), 4), 'self_cosine_median': round(float(np.median(np.sum(doc_vectors * doc_vectors_after, axis=1))), 4)}}\n"
                 "single_report = evaluation_report(pipe.embed(probe_queries, kind='query', instruction=INSTRUCTION), sample_kind='three Banking77 test queries' if not USE_BYOD else 'three BYOD test queries')\n"
                 "print({{'document_shift': document_shift, 'batch_report_verdict': single_report['verdict'], 'probes_with_changed_top3': sum(r['frozen_top3'] != r['adapted_top3'] for r in rows), 'of': len(rows)}})\n"
-                "with open('outputs/{stem}_retrieval.csv', 'w', encoding='utf-8', newline='') as handle:\n"
+                "with open(f'outputs/{stem}_retrieval{{run_tag}}.csv', 'w', encoding='utf-8', newline='') as handle:\n"
                 "    writer = csv.DictWriter(handle, fieldnames=list(rows[0]))\n"
                 "    writer.writeheader()\n"
                 "    writer.writerows(rows)\n\n"
-                "artifact_dir = Path('outputs/{stem}_adapter')\n"
+                "artifact_dir = Path(f'outputs/{stem}_adapter{{run_tag}}')\n"
                 "shutil.rmtree(artifact_dir, ignore_errors=True)\n"
                 "pipe.save_artifact(artifact_dir, metadata={{'tutorial': '{stem}', 'data_source': data_source}})\n"
                 "artifact_manifest = json.loads((artifact_dir / 'manifest.json').read_text(encoding='utf-8'))\n"
                 "print({{'artifact': str(artifact_dir), 'format': artifact_manifest['format'], 'instruction': artifact_manifest['adapter']['instruction'], 'tensors': len(artifact_manifest['tensors']), 'bytes': artifact_manifest['files'][0]['bytes'], 'sha256': artifact_manifest['files'][0]['sha256'][:16] + '...'}})\n\n"
                 "reloaded = Qwen3EmbeddingPipeline.from_artifact(artifact_dir, weights_dir=WEIGHTS_DIR, device=pipe.device)\n"
                 "reloaded_queries = np.asarray(reloaded.embed(probe_queries, kind='query', instruction=INSTRUCTION)['embeddings'], dtype=np.float32)\n"
-                "reloaded_test = reloaded.evaluate(test_records[:77], instruction=INSTRUCTION, candidates=document_set)\n"
-                "in_memory_test = pipe.evaluate(test_records[:77], instruction=INSTRUCTION, candidates=document_set)\n"
-                "parity = {{'query_vectors_identical': bool(np.array_equal(query_vectors_after, reloaded_queries)), 'mrr_in_memory': round(in_memory_test['mrr'], 6), 'mrr_reloaded': round(reloaded_test['mrr'], 6)}}\n"
+                "# Reload parity on the validation queries (never a test split).\n"
+                "reloaded_val = reloaded.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)\n"
+                "in_memory_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)\n"
+                "parity = {{'query_vectors_identical': bool(np.array_equal(query_vectors_after, reloaded_queries)), 'mrr_in_memory': round(in_memory_val['mrr'], 6), 'mrr_reloaded': round(reloaded_val['mrr'], 6), 'split': 'validation'}}\n"
                 "print({{'reload_parity': parity, 'reloaded_best_epoch': reloaded.adapter['best_epoch']}})\n"
-                "assert parity['query_vectors_identical'] and abs(in_memory_test['mrr'] - reloaded_test['mrr']) < 1e-9\n\n"
+                "assert parity['query_vectors_identical'] and abs(in_memory_val['mrr'] - reloaded_val['mrr']) < 1e-9\n\n"
                 "weight_entry = next(entry for entry in snapshot['files'] if entry['path'] == WEIGHT_FILE)\n"
                 "result_payload = {{\n"
                 "    'notebook_source': NOTEBOOK_SOURCE,\n"
@@ -569,6 +738,12 @@ TEMPLATE = {
                 "    'inference_contract': {{'input_manifest': input_manifest, 'sanity_checks': checks, 'probe_queries': probe_queries, 'n_tokens': query_result['n_tokens'], 'seconds': {{'documents': document_seconds, 'queries': query_seconds}}}},\n"
                 "    'comparison': comparison,\n"
                 "    'verdict': comparison['verdict'],\n"
+                "    'test_look': look,\n"
+                "    'preregistered': preregistered,\n"
+                "    'settings_differing': settings_differing,\n"
+                "    'grid_selection': globals().get('grid_selection'),\n"
+                "    'fresh_test': fresh_result,\n"
+                "    'fresh_test_manifest_sha256': fresh['manifest']['manifest_sha256'] if fresh else None,\n"
                 "    'retrieval_before_after': rows,\n"
                 "    'document_shift': document_shift,\n"
                 "    'batch_report': single_report,\n"
@@ -576,7 +751,7 @@ TEMPLATE = {
                 "    'reload_parity': parity,\n"
                 "    'runtime': {{'python': platform.python_version(), 'torch': torch.__version__, 'transformers': transformers.__version__, 'device': pipe.device, 'dtype': 'bfloat16' if pipe.device.startswith('cuda') else 'float32'}},\n"
                 "}}\n"
-                "with open('outputs/{stem}_result.json', 'w', encoding='utf-8') as handle:\n"
+                "with open(f'outputs/{stem}_result{{run_tag}}.json', 'w', encoding='utf-8') as handle:\n"
                 "    json.dump(result_payload, handle, indent=2, ensure_ascii=False)\n"
                 "print(sorted(os.listdir('outputs')))"
             ),
@@ -586,21 +761,61 @@ TEMPLATE = {
                 "**What to notice:** the frozen and adapted top-3 for the three probes, `document_shift`, the artifact's size, and `reload_parity`.\n\n<details><summary>Check "
                 'your reasoning</summary>Every vector moves, because the adapter changes layers all inputs share: the self-cosine of each document to its frozen '
                 'version is below 1, so cosines from the two models are not comparable. In the recorded run the reloaded adapter gave identical query vectors and the '
-                'same MRR on the 77-query parity subset (0.8125 in memory and reloaded).</details>'
+                'same MRR in the Colab CLI T4 run of 9 October 2026 (previous blob `26a62b80`, 77 test queries: 0.8125 in memory and reloaded); this revision checks parity on the 154 validation queries.</details>'
+            ),
+        },
+        {
+            "md": (
+                "## 10. Optional transfer check: CLINC150 (display only)\n\nBanking77 may be in the model's training data (DAT9), so this cell asks a different question on a corpus that is **not an MTEB task**: does the adaptation chosen above help or hurt intent retrieval in other domains? CLINC150 [5] has 150 intents across ten domains (banking, travel, kitchen, small talk, ...). `fetch_transfer_corpus` downloads its `data_full.json` at a pinned commit and refuses a size or SHA-256 mismatch; `build_transfer_set` draws 2 in-scope test queries per intent (300) against the 150 intent phrases and refuses any draw but the pinned one. Both models embed with the same instruction (`TRANSFER_INSTRUCTION`), and the cell prints recall@1 and MRR beside the random floor and the lexical baseline, plus the paired bootstrap 95 % interval of the MRR difference. **Display only:** it is never a selection input and never a stop; whether CLINC150 was in Qwen3-Embedding's training data is undisclosed too, so it is a transfer check, not an out-of-distribution guarantee. About a minute on a T4. Set `RUN_TRANSFER_CHECK = False` to skip it.\n\n**Predict before running:** the adapter was trained on 77 banking intents. On 150 intents from ten domains, will it rank better or worse than the frozen model?"
+            ),
+            "code": (
+                "RUN_TRANSFER_CHECK = True  # @param {{type:\"boolean\"}}\n"
+                "\n"
+                "if not RUN_TRANSFER_CHECK:\n"
+                "    print({{'transfer_check': 'not run (RUN_TRANSFER_CHECK is False)'}})\n"
+                "elif pipe.adapter is None:\n"
+                "    raise RuntimeError('The pipeline holds the pinned base, not an adapted model: run Section 7, Section 8 and Section 9, then this cell.')\n"
+                "else:\n"
+                "    transfer = build_transfer_set(fetch_transfer_corpus(cache_dir='weights/clinc150'))\n"
+                "    t0 = time.perf_counter()\n"
+                "    transfer_floor = random_floor(len(transfer['documents']))\n"
+                "    transfer_lexical = pipe.lexical_baseline(transfer['records'], transfer['documents'])\n"
+                "    transfer_frozen = pipe.evaluate_base(transfer['records'], instruction=TRANSFER_INSTRUCTION, candidates=transfer['documents'])\n"
+                "    transfer_adapted = pipe.evaluate(transfer['records'], instruction=TRANSFER_INSTRUCTION, candidates=transfer['documents'])\n"
+                "    transfer_paired = paired_rank_comparison(transfer_frozen['ranks'], transfer_adapted['ranks'])\n"
+                "    for metric in ('recall@1', 'recall@5', 'mrr'):\n"
+                "        print({{metric: {{'random_floor': round(transfer_floor[metric], 4), 'lexical': round(transfer_lexical[metric], 4), 'frozen': round(transfer_frozen[metric], 4), 'adapted': round(transfer_adapted[metric], 4)}}}})\n"
+                "    print({{'transfer_paired_mrr': {{'delta': round(transfer_paired['delta_mrr'], 4), 'ci95': [round(x, 4) for x in transfer_paired['ci']], 'improved': transfer_paired['n_improved'], 'worse': transfer_paired['n_worse']}}, 'n_queries': transfer_frozen['n_queries'], 'n_documents': transfer_frozen['n_documents'], 'seconds': round(time.perf_counter() - t0, 1), 'role': 'display only; not a selection input or a stop'}})\n"
+                "    transfer_payload = {{\n"
+                "        'corpus': TRANSFER_NAME, 'release': TRANSFER_RELEASE, 'url': TRANSFER_URL, 'file': {{'name': TRANSFER_FILE[0], 'bytes': TRANSFER_FILE[1], 'sha256': TRANSFER_FILE[2]}}, 'license': TRANSFER_LICENSE,\n"
+                "        'manifest_sha256': transfer['manifest_sha256'], 'instruction': TRANSFER_INSTRUCTION,\n"
+                "        'random_floor': transfer_floor, 'lexical': transfer_lexical, 'frozen': transfer_frozen, 'adapted': transfer_adapted, 'paired_mrr': transfer_paired,\n"
+                "        'adapter': {{k: pipe.adapter[k] for k in ('trainable_layers', 'lr', 'best_epoch') if k in pipe.adapter}}, 'role': 'display only; not a selection input or a stop', 'run_test_look': look,\n"
+                "    }}\n"
+                "    with open(f'outputs/{stem}_transfer_check{{run_tag}}.json', 'w', encoding='utf-8') as handle:\n"
+                "        json.dump(transfer_payload, handle, indent=2, ensure_ascii=False)\n"
+                "    print({{'transfer_report': f'outputs/{stem}_transfer_check{{run_tag}}.json'}})"
+            ),
+        },
+        {
+            "md": (
+                "**What to notice:** the four systems on CLINC150, the MRR difference and whether its interval excludes 0, and the number of queries that improved against those that got worse.\n\n<details><summary>Check your reasoning</summary>No recorded hosted value yet for this revision (`docs/release-verification.md` will carry it). Either outcome teaches something: an interval above 0 means the banking adaptation also sharpened intent retrieval elsewhere; an interval below 0 means it specialised the model at a cost to other domains; an interval across 0 means this check cannot tell. None of it changes the configuration chosen in Section 7.</details>"
             ),
         },
     ],
     "closing": (
         "## Interpretation and limits\n\n"
-        "The frozen embedder already retrieves the right intent phrase for well over half of unseen messages (recall@1 in "
-        "the sixties against a lexical baseline in the thirties and a random floor of 1.3 %), and a bounded contrastive "
-        "fine-tuning of the last two decoder layers on 616 pairs lifts held-out recall@1 by more than ten points and "
-        "MRR by about a tenth in a few minutes on CPU, with a 126 MB adapter that reloads to identical vectors. That is "
+        "In the previous blob's recorded runs the frozen embedder already retrieved the right intent phrase for well over half of the "
+        "exposed-development-test messages (recall@1 in the sixties against a lexical baseline in the thirties and a random floor of 1.3 %), "
+        "and a bounded contrastive fine-tuning of the last two decoder layers on 616 pairs lifted recall@1 on those queries by more than ten "
+        "points and MRR by about a tenth, with a 126 MB adapter that reloads to identical vectors. Because Banking77 may be in the model's "
+        "training data (DAT9), the frozen number may be in-distribution, and because those queries chose the old default, the fresh-test row "
+        "and its interval are the numbers to read for this revision. That is "
         "the claim: the adaptation contract can adapt the embedder to a retrieval task end to end on a real labelled "
         "corpus, and the numbers it produces are read against a random floor, a lexical baseline and the frozen model "
         "rather than in isolation.\n\n"
-        "The test split is 385 queries against 77 two-word documents from one seeded split of one corpus with no "
-        "dispersion estimate; recall@k and MRR say whether the gold document ranks first, not whether the vectors are good "
+        "The fresh test is 770 queries (10 per intent) and the exposed development test 385, against 77 two-word documents from one seeded "
+        "split of one corpus; the paired bootstrap interval covers query sampling, not seed-to-seed variation; recall@k and MRR say whether the gold document ranks first, not whether the vectors are good "
         "for any other use. The adapter changes the last layers, which every input shares, so every vector shifts (Section "
         "9 prints each document's cosine to its frozen self) and cosine values from the adapted model are not comparable "
         "to the frozen model's; nothing here measures the effect on other tasks. On CUDA the model runs in bfloat16 and the "
@@ -615,28 +830,29 @@ TEMPLATE = {
         "notebook, can acquire and digest-verify the pinned model snapshot, fetch and digest-verify a real labelled corpus, "
         "validate the demonstrated dataset contract with no message repeated across splits, execute the embedding contract and a bounded "
         "contrastive fine-tuning, evaluate by retrieval metrics against a random floor, a lexical baseline and the frozen "
-        "model on an independent split, and emit the shown machine-readable artifacts — without the repository being "
+        "model on a fresh test split scored only under the pre-registered settings, and emit the shown machine-readable artifacts — without the repository being "
         "reachable. It does **not** establish benchmark superiority, embedding quality on any other task, a usable "
         "acceptance threshold, or production fitness.\n\n"
         "## Activity: how much does the second trainable layer buy?\n\n"
         "Run this only after the default Run all has finished; Section 9's exported files stay as they are unless you re-run Section 9.\n\n"
         "1. **Predict.** Write down the held-out recall@1 you expect from the adapted model if only the **last one** decoder layer trains "
         "(half the trainable parameters, a 63 MB adapter). Above or below the default's? By how much?\n"
-        "2. **Change.** In Section 7 set `TRAINABLE_LAYERS = 1`; leave every other field as it is.\n"
-        "3. **Run.** Run Section 7, then Section 8. Every adaptation starts from the pinned base (`started_from` in Section 7's output), "
+        "2. **Change.** In the training cell of Section 7 (7b) set `TRAINABLE_LAYERS = 1`; leave every other field as it is. This changes a pre-registered "
+        "setting, so the run is **exploratory**: Section 8 reads validation and the exposed development test only and writes `_exploratory_<n>` files.\n"
+        "3. **Run.** Run Section 7 (the grid cell need not run again), then Section 8. Every adaptation starts from the pinned base (`started_from` in Section 7's output), "
         "so this is a fresh experiment, not more training on top of the first run.\n"
         "4. **Observe.** Section 7's epoch 0 (`note: frozen model`) must print the same validation MRR as in the default run — the same "
         "starting point. Then read `delta_vs_frozen` in Section 8 and compare it with the default's.\n"
         "5. **Explain.** Say in one sentence what the second layer added, and whether that is worth twice the adapter size for this task.\n\n"
-        "To put the notebook back to the recorded state, set `TRAINABLE_LAYERS = 2` and run Sections 7, 8 and 9 again.\n\n"
+        "To put the notebook back to the pre-registered state, set `TRAINABLE_LAYERS = 0` (the grid's selection) and run Sections 7b, 8 and 9 again.\n\n"
         "<details><summary>Check your reasoning</summary>Expect a smaller gain, not none: the frozen model already ranks the right intent near the top, "
-        "and one layer can still reorder the last few places, so recall@1 still rises but by less than the default's +13.5 points (Kaggle T4 run). "
+        "and one layer can still reorder the last few places, so recall@1 still rises but by less than the old default's +13.5 points (exposed development test, previous blob's T4 runs of 19 September and 9 October 2026). "
         "The exact figure depends on the device; what matters is the direction and the adapter-size trade-off.</details>\n\n"
         "**More experiments (same procedure, they do not affect the default path):** set `TEMPERATURE = 0.2` and read whether the softer "
         "contrast learns as fast; set `EPOCHS = 4` and watch whether validation MRR keeps rising or turns (the best epoch is kept either way); "
         "change `INSTRUCTION` in Section 4 and re-run from Section 5 to re-read the frozen numbers — the model is instruction-aware; or bring "
-        "your own pairs through BYOD (re-run from Section 4) and read the lexical baseline before the adapted number. On the Banking77 sample "
-        "with changed Section 7 settings, Section 8 reports the verdict instead of stopping.\n\n"
+        "your own pairs through BYOD (re-run from Section 4) and read the lexical baseline before the adapted number. Each of these is "
+        "exploratory: Section 8 reports validation and the exposed development test, never the fresh test, and the files carry an `_exploratory_<n>` tag.\n\n"
         '## Troubleshooting\n\n- **Section 1 stops with "This notebook needs a Linux x86_64 runtime"** — you are on Windows, macOS or an ARM machine. Use Google '
         'Colab, Kaggle or a Linux x86_64 Jupyter server.\n- **The uv wheel fails its size/SHA-256 check, or a download in Section 1 times out** — run Section 1 '
         'again; a complete environment built from the same lock is reused, an incomplete one is finished. If it repeats, the network is blocking or altering '
@@ -645,7 +861,7 @@ TEMPLATE = {
         'keep working. After a session restart, run from the top.\n- **Section 3 reports a size or SHA-256 mismatch, or cannot reach the Hub** — the message '
         'names the file. Delete it from the snapshot folder Section 3 prints and run Section 3 again.\n- **Section 4 reports a size or SHA-256 mismatch for a '
         'Banking77 file** — the download from `raw.githubusercontent.com` was cut short or altered. Run Section 4 again; a verified cached file is reused.\n- '
-        '**Section 7 is slow** — on CPU each epoch takes about a minute; switch to a T4 GPU for a faster run (bfloat16 there, so digits differ slightly from '
+        '**Section 7 is slow** — on CPU each grid configuration takes several minutes and the grid trains three; switch to a T4 GPU for a faster run (bfloat16 there, so digits differ slightly from '
         'the CPU build record).\n- **Your numbers differ slightly from the recorded run** — CUDA runs bfloat16 and CPU float32; the comparison between systems, '
         'not the last digit, is the result.\n- **BYOD: \"CSV is missing columns\" or a record refusal** — the message names the rule: columns `id`, `query`, '
         '`positive` (optional `negative`), at least 12 distinct queries (8 stay for training) and two distinct positives; set `INSTRUCTION` to describe your retrieval task.\n- **BYOD: '
@@ -653,29 +869,35 @@ TEMPLATE = {
         '"the upload dialog exists only in Google Colab"** — on Kaggle or Jupyter, put the file in the runtime and set `BYOD_PATH` to its path.\n- **BYOD: '
         '"Upload exactly one file"** — the dialog was cancelled or several files were chosen; run the cell again.\n- **Section 8 or 9 says the pipeline '
         'holds the pinned base** — you re-ran Section 5 or 6 after Section 7, and they put the pretrained weights back so their numbers are the '
-        'frozen model\'s. Run Section 7 again, then Section 8 and Section 9.\n\n## Glossary\n\n- **Embedding:** a fixed-length '
+        'frozen model\'s. Run Section 7 again, then Section 8 and Section 9.\n- **Section 7b or 8 says the run is exploratory** — a setting differs from the pre-registration (named in '
+        '`settings_differing`); that is expected for the Activity, the experiments and BYOD. Set the Section 7b fields back (`LEARNING_RATE = 0`, `TRAINABLE_LAYERS = 0`, '
+        'the other defaults), make sure the Section 7a grid ran in this session, and run Sections 7b, 8 and 9 again for a pre-registered pass.\n- **Out of memory in Section 7** — '
+        'choose a GPU runtime; a smaller `BATCH_SIZE` works too but makes the run exploratory.\n- **BYOD refused** — the message names the file and the rule; fix the file '
+        'and run Section 4 again. Files already in `outputs/` come from an earlier run.\n\n## Glossary\n\n- **Embedding:** a fixed-length '
         'vector (1024 numbers here) that places a text so similar meanings are close; it carries no score by itself.\n- **Last-token pooling / L2 '
         'normalisation:** the vector is the hidden state of the final token, scaled to length 1 so cosine equals the dot product.\n- **Instruction-aware '
         'query:** queries are prefixed with a one-line task description; documents are embedded as-is.\n- **Cosine similarity:** the angle between two unit '
         'vectors; a similarity, not a probability, and no threshold ships.\n- **Recall@k:** the share of queries whose correct document is among the top k; '
         '**MRR** is the mean of 1 / rank of the correct document.\n- **Random floor / lexical baseline:** what a random ranking achieves; ranking by shared-word '
-        '(Jaccard) overlap — what no model at all gets.\n- **InfoNCE with in-batch negatives:** a contrastive loss that asks each query to pick its own positive '
+        '(Jaccard) overlap — what no model at all gets.\n- **Exposed development test / fresh test:** the 385 test queries the old default was chosen on, shown '
+        'for continuity; the 770 never-scored test queries read only under the pre-registered settings.\n- **Pre-registered / exploratory:** a run '
+        'whose every setting matches the written-down plan; any other run, compared on validation only.\n- **InfoNCE with in-batch negatives:** a contrastive loss that asks each query to pick its own positive '
         "among the batch's documents; the other queries' positives are the negatives.\n- **Temperature:** the scale applied to cosines in the loss; lower is a "
         'sharper contrast.\n- **Frozen / adapted / pinned base:** the packaged model; the model after Section 7; the verified packaged weights every adaptation '
         'starts from (`restore_base`).\n- **Query-disjoint split:** no message appears in two splits, ignoring case, punctuation and spacing; near-paraphrases (token Jaccard ≥ 0.8) are counted, not removed.\n- **Isolated environment:** the '
         'separate Python environment Section 1 builds from the hash lock; every later cell runs there.\n\n## Conclusion (your notes)\n\nComplete these in your own '
-        "words; the recorded run's values are in the **Check your reasoning** answers above.\n\n- On the 385 test queries the frozen embedder reached recall@1 "
+        "words; the labelled recorded values are in the **Check your reasoning** answers above.\n\n- On the 385 exposed-development-test queries the frozen embedder reached recall@1 "
         "___ against the lexical baseline's ___ and the random floor's ___.\n- Two epochs of contrastive fine-tuning moved recall@1 to ___ and MRR to ___ "
         '(verdict: ___).\n- The number I would not trust on its own is ___, because ___.\n- Before adapting on my own pairs I would de-duplicate by ___, compare '
         'against ___, and use harder negatives such as ___.\n\n'
         "## References\n\n"
-        "- Repository README: https://github.com/kurtvalcorza/qwen3-embedding-pipeline/blob/main/README.md\n"
-        "- Repository model card: https://github.com/kurtvalcorza/qwen3-embedding-pipeline/blob/main/MODEL_CARD.md\n"
-        "- Weight provenance: https://github.com/kurtvalcorza/qwen3-embedding-pipeline/blob/main/docs/WEIGHTS.md\n"
-        "- Upstream model: https://huggingface.co/{MODEL_ID}\n"
-        "- Upstream code: https://github.com/QwenLM/Qwen3-Embedding\n"
-        "- Qwen3 Embedding: Advancing Text Embedding and Reranking Through Foundation Models (2025): https://arxiv.org/abs/2506.05176\n"
-        "- Efficient Intent Detection with Dual Sentence Encoders (Casanueva et al., 2020; Banking77, CC BY 4.0): https://arxiv.org/abs/2003.04807\n"
-        "- DIMER Notebook Specification 2.2 and Model Card Specification 1.1 (fleet specs in the ml-worker repository)"
+        "[1] Y. Zhang et al., \"Qwen3 Embedding: Advancing text embedding and reranking through foundation models,\" arXiv:2506.05176, 2025. [Online]. Available: https://arxiv.org/abs/2506.05176\n\n"
+        "[2] Qwen Team, \"Qwen3-Embedding,\" GitHub repository, evaluation/task_prompts.json at commit 44548aa5f0a0aed1c76d64e19afe47727a325b8f. [Online]. Available: https://github.com/QwenLM/Qwen3-Embedding\n\n"
+        "[3] Qwen Team, \"Qwen/Qwen3-Embedding-0.6B,\" Hugging Face model repository, revision {MODEL_REVISION}. [Online]. Available: https://huggingface.co/{MODEL_ID}\n\n"
+        "[4] I. Casanueva, T. Temčinas, D. Gerz, M. Henderson, and I. Vulić, \"Efficient intent detection with dual sentence encoders,\" in *Proc. 2nd Workshop on Natural Language Processing for Conversational AI*, 2020, pp. 38–45. [Online]. Available: https://arxiv.org/abs/2003.04807 (Banking77, CC BY 4.0)\n\n"
+        "[5] S. Larson et al., \"An evaluation dataset for intent classification and out-of-scope prediction,\" in *Proc. EMNLP-IJCNLP*, 2019, pp. 1311–1316. [Online]. Available: https://aclanthology.org/D19-1131 (CLINC150, CC BY 3.0; data at https://github.com/clinc/oos-eval)\n\n"
+        "[6] N. Muennighoff, N. Tazi, L. Magne, and N. Reimers, \"MTEB: Massive text embedding benchmark,\" in *Proc. 17th Conf. European Chapter of the Association for Computational Linguistics (EACL)*, 2023, pp. 2014–2037. [Online]. Available: https://github.com/embeddings-benchmark/mteb\n\n"
+        "[7] K. Valcorza, \"qwen3-embedding-pipeline: README, model card, weight provenance, pre-registration and release verification,\" GitHub repository. [Online]. Available: https://github.com/kurtvalcorza/qwen3-embedding-pipeline (README.md, MODEL_CARD.md, docs/WEIGHTS.md, docs/qwen3-embedding-preregistration.md, docs/release-verification.md)\n\n"
+        "[8] DIMER platform, \"DIMER Notebook Specification 2.5\" and \"Model Card Specification 1.1,\" fleet specifications in the ml-worker repository, 2026."
     ),
 }
