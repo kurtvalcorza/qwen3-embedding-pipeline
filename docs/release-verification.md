@@ -132,6 +132,7 @@ A known-failing default path in the supported runtime blocks release (REL11).
 
 | Notebook | Commit / notebook blob | Date (UTC) | Executor | Outcome |
 |---|---|---|---|---|
+| `qwen3_embedding_colab.ipynb` (`E2E`) | `1cc43ed` / `971187e6` | 2026-10-17 | Colab CLI 0.7.4, fresh Colab Tesla T4 (sequential `colab exec -f`, not a browser Run all), `cuda:0`, bfloat16 | **PASSED** — 14/14 code cells, 0 errors, no restart, 382.9 s; **REL13: pre-registered evaluation of record** for the fresh test (record section *2026-10-17 hosted T4 evaluation of record* below) |
 | `qwen3_embedding_colab.ipynb` (`E2E`) | `ec6dd95` / `f3475b93` | 2026-09-19 | Kaggle Tesla T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v3; image `torch 2.10.0+cu128` / `transformers 5.0.0` before the pinned install, `torch 2.14.0+cu130` / `transformers 4.57.6` after, Python 3.12.13, `cuda:0`) | **PASSED** — 11/11 code cells ok (1 restart after install cell); 26 files, 1209 MB staged from the Hub into a clean cache; comparison {recall@1: {random_floor: 0.013, lexical: 0.3065, frozen: 0.6312, adapted: 0.7662}, recall@5: {random_floor: 0.0649, lexical: 0.5039, frozen: 0.8857, adapted: 0.9714}, recall@10: {random_floor: 0.1299, lexical: 0.6753, frozen: 0.9377, adapted: 0.9896}, mrr: {random_floor: 0.064, lexical: 0.4159, frozen: 0.741, adapted: 0.8498}, median_rank: {lexical: 5, frozen: 1, adapted: 1}, delta_vs_frozen: {recall@1: 0.1351, recall@5: 0.0857, recall@10: 0.0519, mrr: 0.1087}}; reload parity {query_vectors_identical: True, mrr_in_memory: 0.8125, mrr_reloaded: 0.8125}; run summary and executed notebook archived under `.agent/backups/kaggle-e2e-2026-09-19/out/dimer-nb2-qwen3-embedding/v3/evidence/` in the workspace |
 | `qwen3_embedding_colab.ipynb` (`E2E`) | `9bcb449` / `40e0a136` | 2026-09-19 | Local pre-flight harness (Windows, CPython 3.12.10, CPU, `google.colab` shim, pins pre-installed) | PASS — pre-flight only, **not** promotion evidence |
 | `qwen3_embedding_colab.ipynb` (`TASK-INFERENCE`, superseded) | `cbeec85` / `7715612eea32` | 2026-09-14 | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | PASSED — 8/8 code cells, 234.2 s, 1,207 MB staged; evidence for the earlier inference-only notebook, not for the `E2E` blob |
@@ -145,7 +146,8 @@ general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
-| 2026-10-09 (02:00:47 UTC start) | commit `6606b82` / blob `26a62b8096aa26ad870987d1fa5c0c17b7cf5753` (`NOTEBOOK_SOURCE.repository_revision` `9c8dc93`, the source revision the notebook was generated from; `9c8dc93..6606b82` are the review-fix commit and a test-only commit; generator `build_notebook.py/2.2`, `notebook_spec` 2.2) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 55 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default sample path only (USE_BYOD = False, default form values); 11 snapshot files fetched from the Hub and digest-verified | 201.4 s | **PASSED — one pass, no restart, 0 errors**: 12/12 code cells (the three carried-module cells print nothing); near-duplicates validation 5 / test 9 (Jaccard ≥ 0.8); input manifest 77 documents; random floor recall@1 0.013 / MRR 0.064; lexical 0.3065 / 0.4159; frozen 0.6312 / 0.741 (`adapted: False`); validation MRR 0.6962 → 0.7664 → 0.7877, best epoch 2; adapted 0.7662 / 0.8498 (Δ recall@1 +0.1351, MRR +0.1087, verdict *improved*); document self-cosine median 0.8458; reload parity exact (query vectors identical, MRR 0.812533 both ways); six exports. These match the worked answers. Evidence [`docs/execution-evidence/2026-10-09-6606b82/`](execution-evidence/2026-10-09-6606b82/): executed notebook SHA-256 `f3cc25d398b92b95083a8f3ac0302ea7057f7a151e62aba55a6231bad2a98a8b`, `run_summary.json` `d4c7af9a0a6b05f63000b94af356c9ebd90960c1efd375985a7cd5c13a31fbfb`, `exec.log` `fca046a13c129c2939c670a9c5084dc75e638ce1135a20bbb224668f8769e79d`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
+| 2026-10-17 (17:42:18 UTC start) | commit `1cc43ed` / blob `971187e6a67b878a6ce11c19c0b297c9d512d719` (PR #14 head; `NOTEBOOK_SOURCE.repository_revision` `6a90df9`; `6a90df9..1cc43ed` are the regenerated notebook and a docs-only commit; generator `build_notebook.py/2.2`, `notebook_spec` 2.5) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 44 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default path only, form values at their defaults (no `# @param` edits; the fetched source is byte-equal to the blob); 11 snapshot files fetched from the Hub and digest-verified; `preregistered` True, `settings_differing` [] | 382.9 s (session wall, `run_summary.json`) | **PASSED — REL13: pre-registered evaluation of record** (first hosted run of the pre-registered settings; first scoring of the fresh test by any run): 14/14 code cells, 0 error outputs, no restart; grid C0 / C1 / C2 validation MRR 0.7877 / 0.7197 / 0.7299 (frozen 0.6962) → C0; **fresh test (770): frozen recall@1 0.6351 / MRR 0.7338 → adapted 0.761 / 0.8455, paired MRR difference +0.1118 (95 % CI 0.0911 to 0.134 query-level, 0.0711 to 0.1569 intent-level; 215 improved, 39 worse)**; exposed development test 0.6312 / 0.741 → 0.7662 / 0.8498; CLINC150 near-domain +0.0227 (CI −0.0097 to 0.0579), other 8 domains −0.0159 (CI −0.0348 to 0.0022). Evidence [`docs/execution-evidence/2026-10-17-1cc43ed/`](execution-evidence/2026-10-17-1cc43ed/): executed notebook SHA-256 `fa6a801d4dd305b69b0aa36be805316e97e09769c4ff5d80f8a9314770e3bbdf`, `run_summary.json` `e411bcee379b7a40f9803ea65252e71f8beeb3b4d7f06bbc9a69ed30af2b3f2c`, `exec.log` `fe1ba2865426298a65a4973d1ff984ced0764a009517c88d95bf9497a8a023c0`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
+| 2026-10-09 (02:00:47 UTC start) | commit `6606b82` / blob `26a62b8096aa26ad870987d1fa5c0c17b7cf5753` (`NOTEBOOK_SOURCE.repository_revision` `9c8dc93`, the source revision the notebook was generated from; `9c8dc93..6606b82` are the review-fix commit and a test-only commit; generator `build_notebook.py/2.2`, `notebook_spec` 2.2) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 55 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default sample path only (USE_BYOD = False, default form values); 11 snapshot files fetched from the Hub and digest-verified | 201.4 s | **REL13: earlier-blob history** (blob `26a62b80`, before the pre-registration). **PASSED — one pass, no restart, 0 errors**: 12/12 code cells (the three carried-module cells print nothing); near-duplicates validation 5 / test 9 (Jaccard ≥ 0.8); input manifest 77 documents; random floor recall@1 0.013 / MRR 0.064; lexical 0.3065 / 0.4159; frozen 0.6312 / 0.741 (`adapted: False`); validation MRR 0.6962 → 0.7664 → 0.7877, best epoch 2; adapted 0.7662 / 0.8498 (Δ recall@1 +0.1351, MRR +0.1087, verdict *improved*); document self-cosine median 0.8458; reload parity exact (query vectors identical, MRR 0.812533 both ways); six exports. These match the worked answers. Evidence [`docs/execution-evidence/2026-10-09-6606b82/`](execution-evidence/2026-10-09-6606b82/): executed notebook SHA-256 `f3cc25d398b92b95083a8f3ac0302ea7057f7a151e62aba55a6231bad2a98a8b`, `run_summary.json` `d4c7af9a0a6b05f63000b94af356c9ebd90960c1efd375985a7cd5c13a31fbfb`, `exec.log` `fca046a13c129c2939c670a9c5084dc75e638ce1135a20bbb224668f8769e79d`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
 | 2026-10-14 (23:27:48 UTC start) | commit `7dbcc38` / blob `089696de` (`DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb`, PR #13 head; `notebook_spec` 2.5) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 52 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, embedder and reranker both on `cuda:0`, bfloat16 | Default path only (USE_BYOD=False, RUN_K_SWEEP=False, seed 42, K=6; no toggles changed); both snapshots fetched from the Hub and digest-verified | 164.5 s (session wall, `run_summary.json`) | **PASSED** — 19/19 code cells in order, 0 error outputs, no restart; embedding recall@1 0.6104 / MRR over 77 0.7310; two-stage recall@1 0.6234 / MRR@6 0.7379; helped / hurt 29 / 24; every computed number equal to the 2026-10-04 run of `d72ea820`; new paired view +17 / −15 (exact sign test p = 0.86), embedding top-6 MRR@6 0.7241; [executed notebook](execution-evidence/2026-10-14/DIMER_Qwen3_Semantic_Search_Reranking_Workshop_7dbcc38_colab-cli-t4.ipynb) |
 | 2026-10-04 | `2996bb2` / `d72ea820` (`DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb`) | Google Colab (browser, maintainer-run), Tesla T4; kernel Python 3.13.15, uv isolated environment CPython 3.12.12 (47 locked packages), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default path only (USE_BYOD=False, RUN_K_SWEEP=False, seed 42, K=6; no toggles changed), Run all | not recorded (no per-cell timing saved; isolated setup 65 s, index 11.3 s, rerank 37.2 s) | **PASSED** — 19/19 code cells, execution counts 1..19, 0 error outputs, no restart; two-stage recall@1 0.6234, MRR 0.7379 (identical to the 2026-09-26 run of `5512be30`); [executed notebook](execution-evidence/2026-10-04/DIMER_Qwen3_Semantic_Search_Reranking_Workshop_2996bb2_colab-browser-t4.ipynb) |
 | 2026-09-19 | `ec6dd95` / `f3475b93` | Kaggle Tesla T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v3; image `torch 2.10.0+cu128` / `transformers 5.0.0` before the pinned install, `torch 2.14.0+cu130` / `transformers 4.57.6` after, Python 3.12.13, `cuda:0`) | Default sample path, `Run all` from a fresh interpreter with an empty Hugging Face cache and no repository checkout (blob SHA-1 verified against GitHub before execution) | 323.6 s | **PASSED** — 11/11 code cells ok (1 restart after install cell); 26 files, 1209 MB staged from the Hub into a clean cache; comparison {recall@1: {random_floor: 0.013, lexical: 0.3065, frozen: 0.6312, adapted: 0.7662}, recall@5: {random_floor: 0.0649, lexical: 0.5039, frozen: 0.8857, adapted: 0.9714}, recall@10: {random_floor: 0.1299, lexical: 0.6753, frozen: 0.9377, adapted: 0.9896}, mrr: {random_floor: 0.064, lexical: 0.4159, frozen: 0.741, adapted: 0.8498}, median_rank: {lexical: 5, frozen: 1, adapted: 1}, delta_vs_frozen: {recall@1: 0.1351, recall@5: 0.0857, recall@10: 0.0519, mrr: 0.1087}}; reload parity {query_vectors_identical: True, mrr_in_memory: 0.8125, mrr_reloaded: 0.8125}; run summary and executed notebook archived under `.agent/backups/kaggle-e2e-2026-09-19/out/dimer-nb2-qwen3-embedding/v3/evidence/` in the workspace |
@@ -153,6 +155,8 @@ general estimates.
 | 2026-09-14 | `cbeec85` / `7715612eea32` (`TASK-INFERENCE`, superseded) | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | Default sample path of the inference-only notebook: the four README sentences, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot` over 11 files, query/document embedding with the cosine check, `not-measurable` report, CSV + JSON exports | 234.2 s | **PASSED** — 8/8 code cells, 1,207 MB staged; history only |
 
 ## Primary embedding tutorial status
+
+**Current (2026-10-17).** Blob `971187e6` (PR #14 head `1cc43ed`) ran its first hosted pre-registered pass on a fresh Colab Tesla T4 (Colab CLI, 14/14 cells, 0 errors, no restart); that run is the **evaluation of record** for the fresh test (record section below). Later hosted runs with identical pre-registered settings are reproductions. Hosted BYOD (REL12) and the activity are not run, so status stays **Candidate** (REL14). The paragraphs below are **REL13: earlier-blob history**.
 
 **Candidate.** The `E2E` notebook blob `f3475b93` (committed at `ec6dd95`) executed top-to-bottom in a clean Kaggle Tesla T4 runtime on 2026-09-19 (11/11 ok, 323.6 s, 26 files, 1209 MB fetched from the Hub and digest-verified inside the notebook) with no repository checkout, but it needed **one manual restart after the install cell** (pass 1 raised the stale-import guard: cuda-bindings 12.9.4 → 13.4.2, NumPy 2.0.2 → 2.5.3). A restart-assisted run does not meet the no-restart gate (RUN10/ENV6), so that record is history, not release evidence; the earlier "Release-grade" label is withdrawn.
 
@@ -184,9 +188,9 @@ reported, not removed: 39 in the clean pool, 10 in the draw.
 **Development looks at the fresh test: none.** Following SCORE_ONCE_RULE item 8, the fixer's CPU check below ran with
 the fresh test masked (built and digest-checked, never scored; a guard aborted the run if any fresh query reached
 `evaluate`). The first hosted T4 run of the pre-registered settings is the evaluation of record; later identical hosted
-runs are reproductions. `samples.RECORDED_EVALUATION` stays `None` until that run is recorded here.
+runs are reproductions. `samples.RECORDED_EVALUATION` stays `None` until that run is recorded here. *(2026-10-17: the run is recorded below; the constant is still `None` at `1cc43ed` and is a pending code follow-up, so a later identical run still prints "pre-registered evaluation (this runtime)" in-notebook. This file names the record.)*
 
-**CPU build record (validation + exposed development test only).** Windows workstation, CPython 3.12, `torch 2.14.0+cpu`,
+**REL13: CPU development look (validation + exposed development test only; fresh test masked, never scored).** Recorded as the CPU build record; never used to change a setting after the hosted run. Windows workstation, CPython 3.12, `torch 2.14.0+cpu`,
 `transformers 4.57.6`, float32, `CUDA_VISIBLE_DEVICES=-1`, uncommitted working tree on branch
 `fix/qwen3-embedding-tutorial-review-2026-10-17`, 2026-10-18 (its package logic is that of commit `a93f99e`; the
 edits made before that commit were docstring and line wrapping only). Not a hosted run;
@@ -220,8 +224,7 @@ lexical recall@1 0.2933, random-floor MRR 0.0373. CPU stage times: frozen
 evaluation 72.6 s, grid 1488.3 s, selected retrain 372.1 s, adapted evaluation
 72.5 s, transfer 51.0 s.
 
-**Open:** the hosted T4 run of the regenerated blob (the evaluation of record for the fresh test, the hosted grid and the
-transfer check); hosted BYOD (REL12). Status stays **Candidate**.
+**Open:** hosted BYOD (REL12). Status stays **Candidate**. *(2026-10-17: the hosted T4 run of the regenerated blob, which was open here, is recorded below as the evaluation of record.)*
 
 ### 2026-10-18 peer-review follow-up (row 72, F1-F14)
 
@@ -244,7 +247,7 @@ its `SAMPLE_SEED` form field. At seed 42 (every recorded workshop run) none is a
 123 the draw holds 36, 29, 41 and 46 of them (checked 2026-10-18 with `samples.workshop_w16_queries`, data only). Maintainer
 runs of the workshop keep seed 42; any other run is to be recorded here as a fresh-test exposure. The workshop is unchanged.
 
-**Transfer check split (F1), CPU build record, added after the 2026-10-17 record.** The adapted model is C0, retrained
+**REL13: CPU development look — transfer check split (F1), CPU build record, added after the 2026-10-17 record.** The adapted model is C0, retrained
 on CPU with the pre-registered settings (per-epoch validation MRR identical to the grid row). The fresh test was masked.
 Each row ranks against its own intent phrases. The pooled row reproduces the 2026-10-17 numbers exactly.
 
@@ -258,6 +261,113 @@ Old -> new: the pooled interval across 0 hid a near-domain gain and a small othe
 excludes 0 but whose intent-level interval does not. Display only; nothing in the selection changes. On the exposed
 development test the intent-level interval of the paired MRR difference is 0.0877 to 0.1838 (query-level 0.1069 to
 0.1664).
+
+### 2026-10-17 hosted T4 evaluation of record (blob `971187e6`, PR #14 head `1cc43ed`)
+
+**REL13: pre-registered evaluation of record.** This is the first hosted run of the pre-registered settings and the first
+scoring of the fresh test by any run (the CPU checks above masked it). Later hosted runs with identical settings are
+reproductions; a run with any other setting is exploratory and never scores the fresh test.
+
+- **File.** [`docs/execution-evidence/2026-10-17-1cc43ed/`](execution-evidence/2026-10-17-1cc43ed/): executed notebook
+  (SHA-256 `fa6a801d4dd305b69b0aa36be805316e97e09769c4ff5d80f8a9314770e3bbdf`), `exec.log` (`fe1ba286…`) and
+  `run_summary.json` (`e411bcee…`), byte for byte (`-text`).
+- **Source match.** The fetched notebook's `git hash-object` is `971187e6a67b878a6ce11c19c0b297c9d512d719`, the blob at
+  `1cc43ed`, and it is byte-equal to the committed file. All 40 executed cells have the same ids and order, with no
+  source differences and no `# @param` edits. `NOTEBOOK_SOURCE.repository_revision` `6a90df9`, `module_sha256`
+  `00f2ef59…`, generator `build_notebook.py/2.2`, spec 2.5.
+- **Executor.** Colab CLI 0.7.4 (`colab exec -f`) on a fresh Colab VM, Tesla T4 (session `suite-qwen3-1cc43ed-3e4c`).
+  This is sequential CLI execution, not a browser Run all: forms and uploads were not exercised, and the file has no
+  execution counts (order from `exec.log`, cells 1..14). Kernel Python 3.13.15; uv isolated environment CPython 3.12.12,
+  47 locked packages, built in 44 s; `torch 2.14.0+cu130`, `transformers 4.57.6`; `cuda:0`, bfloat16.
+- **Execution.** 14/14 code cells (the three carried-module cells print nothing), 0 error outputs, no restart, session wall
+  382.9 s. 11 snapshot files (1,207,487,471 B) fetched from the Hub and digest-verified. Stage times: grid 138.9 s,
+  selected retrain 47.7 s, transfer check 11.1 s.
+- **Pre-registration.** `preregistered` True, `settings_differing` [], `test_look` "pre-registered evaluation (this
+  runtime)", selected model `adapted C0`, keep-frozen False.
+
+**Validation grid (154 queries; best epoch 2 for every configuration).**
+
+| Config | Layers | LR | Val MRR by epoch 0 → 1 → 2 | Val recall@1 | Val MRR |
+|---|---|---|---|---|---|
+| C0 | 2 | 5e-05 | 0.6962 → 0.7664 → 0.7877 | 0.6753 | 0.7877 |
+| C1 | 2 | 2e-05 | 0.6962 → 0.714 → 0.7197 | 0.5909 | 0.7197 |
+| C2 | 4 | 2e-05 | 0.6962 → 0.719 → 0.7299 | 0.5909 | 0.7299 |
+
+Frozen validation recall@1 0.5779, MRR 0.6962. Selection **C0** ("no challenger beat C0 by the margin": C1 −0.068 and C2
+−0.058 against C0; C0 +0.0915 over frozen, so the adapter is kept). The selected retrain repeated the C0 curve exactly.
+The grid summary line prints `'lr': 0.0001` for C0 and `'lr': 0.0` for C1/C2 because it rounds every float to four
+decimals (`tools/notebook_template.py`, grid summary print); the configuration headers and the final configuration
+(`5e-05`) are correct. Display only; open as a follow-up.
+
+**Fresh test (770 queries, 10 per intent, manifest `fe68b43a…`), the evaluation of record.**
+
+| System | Recall@1 | Recall@5 | Recall@10 | MRR | Median rank |
+|---|---|---|---|---|---|
+| Frozen | 0.6351 | 0.8688 | 0.9312 | 0.7338 | 1 |
+| Adapted C0 | 0.761 | 0.9571 | 0.9779 | 0.8455 | 1 |
+
+Paired MRR difference **+0.1118**, bootstrap 95 % interval **0.0911 to 0.134** (query-level, pre-registered) and
+**0.0711 to 0.1569** (intent-level cluster bootstrap, secondary); 215 queries improved, 39 worse, 516 unchanged. Both
+intervals exclude 0; verdict *improved*. Re-derived from the printed values: every recall × 770 is a whole count (489 →
+586 at recall@1), each MRR lies inside the bounds its recall@1/5/10 allow, and 215 + 39 + 516 = 770. The bootstrap
+intervals were not recomputed: the per-query ranks stayed on the released VM.
+
+**Exposed development test (385; not independent — the old default was chosen on it).** Random floor 0.013 / 0.064,
+lexical 0.3065 / 0.4159, frozen 0.6312 / 0.741, adapted 0.7662 / 0.8498 (recall@1 / MRR; Δ MRR +0.1087). This revision
+prints no paired interval for this split.
+
+**CLINC150 transfer check (display only).**
+
+| Row (T4, bfloat16) | Queries / phrases | Frozen MRR | Adapted MRR | Delta MRR | 95 % CI, queries | 95 % CI, intents | Improved / worse |
+|---|---|---|---|---|---|---|---|
+| Near-domain (CLINC banking + credit_cards) | 60 / 30 | 0.7237 | 0.7464 | +0.0227 | −0.0097 to 0.0579 | −0.0100 to 0.0584 | 12 / 4 |
+| Other 8 domains | 240 / 120 | 0.7940 | 0.7781 | −0.0159 | −0.0348 to 0.0022 | −0.0381 to 0.0062 | 24 / 26 |
+
+Every interval includes 0. This revision prints no pooled 150-phrase row.
+
+**Against the CPU development look (float32, fresh test masked).** The selection is the same (C0, best epoch 2 everywhere),
+but the numbers are not close:
+
+| Measure | CPU development look | Hosted T4 record | Difference |
+|---|---|---|---|
+| Frozen validation MRR / recall@1 | 0.6991 / 0.5844 | 0.6962 / 0.5779 | −0.0029 / −0.0065 |
+| C0 validation MRR / recall@1 | 0.8284 / 0.7273 | 0.7877 / 0.6753 | −0.0407 / −0.0520 |
+| C1 validation MRR / recall@1 | 0.7962 / 0.6818 | 0.7197 / 0.5909 | −0.0765 / −0.0909 |
+| C2 validation MRR / recall@1 | 0.8270 / 0.7208 | 0.7299 / 0.5909 | −0.0971 / −0.1299 |
+| C2 − C0 validation MRR | −0.0014 (inside the margin) | −0.0578 | C2 no longer near C0 |
+| Exposed frozen recall@1 / MRR | 0.6338 / 0.7422 | 0.6312 / 0.741 | −0.0026 / −0.0012 |
+| Exposed adapted recall@1 / MRR | 0.8026 / 0.8785 | 0.7662 / 0.8498 | −0.0364 / −0.0287 |
+| Exposed Δ MRR | +0.1363 (CI 0.1069 to 0.1664) | +0.1087 (no CI printed) | −0.0276 |
+| Transfer near-domain frozen / adapted MRR | 0.7238 / 0.7833 | 0.7237 / 0.7464 | −0.0001 / −0.0369 |
+| Transfer near-domain Δ (CI queries) | +0.0595 (0.0190 to 0.1082, excludes 0) | +0.0227 (−0.0097 to 0.0579, includes 0) | −0.0368 |
+| Transfer other-8 frozen / adapted MRR | 0.7946 / 0.7736 | 0.7940 / 0.7781 | −0.0006 / +0.0045 |
+| Transfer other-8 Δ (CI queries) | −0.0209 (−0.0418 to −0.0017, excludes 0) | −0.0159 (−0.0348 to 0.0022, includes 0) | +0.0050 |
+| Adapter size | 125,849,896 B (float32) | 62,926,128 B (bfloat16) | dtype |
+| Grid / retrain / transfer time | 1,488.3 / 372.1 / 51.0 s | 138.9 / 47.7 / 11.1 s | device |
+
+The frozen numbers agree to within 0.007 (bfloat16 versus float32 inference). The adapted numbers are 0.03–0.10 MRR lower
+on T4, more so at the lower learning rate (C1, C2). The likely cause (inferred, not tested) is that training on CUDA
+updates bfloat16 weights directly, so AdamW steps of 2e-5 to 5e-5 are partly lost to bfloat16 rounding. Neither CPU
+transfer conclusion (near-domain gain, other-domain loss) is reproduced at T4 precision. None of this changes a
+setting: the CPU look is disclosed, and the hosted run is the record.
+
+**Against the previous hosted run (2026-10-09, blob `26a62b80`).** The exposed-test frozen and adapted metrics, the C0
+validation curve, the lexical baseline, the random floor and the document self-cosine (median 0.8458, minimum 0.7634)
+are equal at printed precision. Every other difference is a PR #14 change: the grid, fresh-test and transfer blocks, the
+split labels, reload parity on validation (0.787748 both ways) instead of the test split, the extra
+`…_grid_validation.json` export and the `started_from` text. The rest is timing.
+
+**Evidence boundary.** Default path only, by CLI sequential execution. BYOD (REL12), the activity and the optional
+experiments were not run. The `outputs/` files stayed on the released VM, so their bytes (per-query ranks, the
+evaluation report, the transfer report) were not inspected.
+
+| Journey | Verdict |
+|---|---|
+| Clean default path (isolated env, no restart; CLI sequential) | PASS |
+| Activity / optional experiments | not assessed in this run |
+| BYOD | not assessed in this run |
+
+Status stays **Candidate**.
 
 ## Qwen3 semantic search and reranking notebook — 2026-09-26 follow-up
 
