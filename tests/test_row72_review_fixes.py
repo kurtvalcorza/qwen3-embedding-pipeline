@@ -375,7 +375,10 @@ def test_stamp_revision_holds_the_carried_modules(notebook):
         if cell["cell_type"] != "code" or not meta.get("embedded_module"):
             continue
         rel = meta["embedded_module"]
-        committed = subprocess.run(["git", "-C", str(ROOT), "show", f"{revision}:{rel}"], check=True, capture_output=True).stdout.decode("utf-8")
-        body = [line for line in committed.splitlines() if line.strip() and not line.startswith("from .")]
+        committed = subprocess.run(["git", "-C", str(ROOT), "show", f"{revision}:{rel}"], check=True, capture_output=True).stdout
+        # The cell records the SHA-256 of the module source it carries; the stamp must hold exactly those bytes.
+        assert hashlib.sha256(committed).hexdigest() == meta["module_sha256"], rel
+        # Every line survives except the generator's documented standalone rewrites (relative imports, weights dir).
+        body = [line for line in committed.decode("utf-8").splitlines() if line.strip() and not line.strip().startswith("from .") and not line.startswith("DEFAULT_WEIGHTS_DIR")]
         carried = _source(cell)
         assert all(line in carried for line in body), rel
