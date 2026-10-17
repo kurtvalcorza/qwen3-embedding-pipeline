@@ -1,18 +1,27 @@
 """Query–positive pair dataset contract for contrastive adaptation of the embedder: the pinned Banking77
 sample, validation, seeded splitting, BYOD loaders and CSV export.
 
-The default dataset is **real** and a retrieval task the embedder was not tuned for: Banking77 (Casanueva et
-al., 2020; CC BY 4.0), 13,083 customer-support messages labelled with 77 fine-grained banking intents. Two CSV
-files (`train.csv`, `test.csv`) are fetched from the PolyAI `task-specific-datasets` repository at a pinned
-commit and refused on any byte-size or SHA-256 mismatch. Every intent name becomes a short **document**
-(`card_arrival` → `card arrival`); each message is a **query** whose positive document is its intent phrase,
-so retrieval over the 77 documents is intent detection by nearest neighbour. Training and validation queries
-are drawn from `train.csv`, test queries from `test.csv` — the release's own partition — balanced over the
-77 intents.
+The default dataset is **real**: Banking77 (Casanueva et al., 2020; CC BY 4.0), 13,083 customer-support
+messages labelled with 77 fine-grained banking intents. Two CSV files (`train.csv`, `test.csv`) are fetched
+from the PolyAI `task-specific-datasets` repository at a pinned commit and refused on any byte-size or
+SHA-256 mismatch. Every intent name becomes a short **document** (`card_arrival` → `card arrival`); each
+message is a **query** whose positive document is its intent phrase, so retrieval over the 77 documents is
+intent detection by nearest neighbour. Training and validation queries are drawn from `train.csv`, test
+queries from `test.csv` — the release's own partition — balanced over the 77 intents.
 
-A record is ``{id, query, positive}`` (an optional ``negative`` is accepted and carried); the document set
-of a dataset is its sorted unique positives.
-"""
+DAT9 (training-data overlap): Banking77 is an MTEB classification task, and Qwen3-Embedding reports MTEB
+results (the upstream evaluation/task_prompts.json carries a Banking77Classification prompt). The technical
+report (arXiv:2506.05176, Table 6) neither lists nor excludes Banking77 from the training mix, so the frozen
+model's score here may be in-distribution.
+
+The 385 seed-42 test queries (5 per intent) were compared across configurations in 2026-09, so they are the
+**exposed development test**. The **fresh test** (`build_fresh_test`) is 10 per intent drawn from the
+test.csv messages this repository had never scored: not the tutorial's 385, not the workshop W16's 154, and
+not an exact repeat of any train.csv message. It is pinned by a manifest SHA-256 and scored only under the
+pre-registered settings (docs/qwen3-embedding-preregistration.md).
+
+A record is ``{id, query, positive}`` (an optional ``negative`` is accepted and carried); the document set of
+a dataset is its sorted unique positives."""
 
 from __future__ import annotations
 
@@ -472,3 +481,350 @@ def write_dataset_csv(records: Sequence[Mapping[str, Any]], path: str | Path) ->
                 }
             )
     return out
+
+
+# ---- Fresh test, pre-registration and the validation grid (row 72 fix, 2026-10-17) ------------------------
+
+WORKSHOP_W16_SEED = (
+    42  # tools/semantic_search_reranking_workshop_source.py: SAMPLE_SEED, 2 per intent from test.csv
+)
+WORKSHOP_W16_PER_INTENT = 2
+FRESH_TEST_SEED = 20_261_017
+FRESH_TEST_PER_INTENT = 10
+FRESH_TEST_SIZE = FRESH_TEST_PER_INTENT * CORPUS_INTENTS  # 770
+FRESH_TEST_MANIFEST_SHA256 = "fe68b43ae56b9092ab92f6eeb610b2179222d1dfa04c3eebd9c658ac69c0908f"
+
+
+class DatasetRefused(ValueError):
+    """A BYOD input the notebook refuses (DAT20): shown as one message, not a traceback."""
+
+    dimer_refusal = True
+
+    def _render_traceback_(self) -> list[str]:  # IPython shows the message only
+        return [str(self)]
+
+
+def workshop_w16_queries(corpus: Mapping[str, Sequence[Mapping[str, Any]]]) -> list[dict[str, Any]]:
+    """The 154 test.csv messages the merged workshop W16 scores (2 per intent, its own seeded draw),
+    reproduced with the workshop's logic so the fresh test can exclude them."""
+    test_rows = [
+        r
+        for r in corpus["test"]
+        if str(r["text"]).strip()
+        and str(r["intent"]).strip()
+        and len(str(r["text"]).strip()) <= MAX_TEXT_CHARS
+    ]
+    intents = sorted({str(r["intent"]).strip() for r in corpus["train"] if str(r["text"]).strip()})
+    by_intent: dict[str, list[Mapping[str, Any]]] = {}
+    for row in test_rows:
+        by_intent.setdefault(str(row["intent"]).strip(), []).append(row)
+    rng = random.Random(WORKSHOP_W16_SEED)
+    out = []
+    for intent in intents:
+        pool = list(by_intent.get(intent, []))
+        rng.shuffle(pool)
+        out.extend(
+            {"id": r["id"], "query": str(r["text"]).strip(), "intent": intent}
+            for r in pool[:WORKSHOP_W16_PER_INTENT]
+        )
+    return out
+
+
+def fresh_test_digest(records: Sequence[Mapping[str, Any]]) -> str:
+    """Manifest SHA-256 of a fresh-test draw: the sorted (source id, query) pairs."""
+    payload = sorted([str(r["source_id"]), str(r["query"])] for r in records)
+    return _sha256_bytes(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+def build_fresh_test(
+    corpus: Mapping[str, Sequence[Mapping[str, Any]]],
+    splits: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    *,
+    verify: bool = True,
+) -> dict[str, Any]:
+    """The pinned fresh test: 10 per intent from the test.csv messages this repository never scored.
+
+    Excluded before the draw: the tutorial's seed-42 test draw (the exposed development test), the workshop
+    W16's 154 queries and every exact repeat (`query_key`) of any train.csv message. Near-paraphrases (token
+    Jaccard >= 0.8) of the training and validation draw are reported, not removed. `verify` refuses a draw
+    whose manifest SHA-256 is not FRESH_TEST_MANIFEST_SHA256."""
+    exposed_splits = build_sample_dataset(corpus, seed=SAMPLE_SEED)
+    tutorial_keys = {query_key(r["query"]) for r in exposed_splits["test"]}
+    workshop_keys = {query_key(r["query"]) for r in workshop_w16_queries(corpus)}
+    exposed = tutorial_keys | workshop_keys
+    train_keys = {query_key(r["query"]) for r in filter_records(corpus["train"])}
+    pool = filter_records(corpus["test"])
+    never_scored = [r for r in pool if query_key(r["query"]) not in exposed]
+    exact_repeats = [r for r in never_scored if query_key(r["query"]) in train_keys]
+    clean = [r for r in never_scored if query_key(r["query"]) not in train_keys]
+    intents = sorted({r["intent"] for r in pool})
+    rng = random.Random(FRESH_TEST_SEED)
+    picked = []
+    for intent in intents:
+        candidates = sorted((r for r in clean if r["intent"] == intent), key=lambda r: r["id"])
+        rng.shuffle(candidates)
+        if len(candidates) < FRESH_TEST_PER_INTENT:
+            raise ValueError(f"fresh test: only {len(candidates)} never-scored messages for {intent!r}")
+        picked.extend(candidates[:FRESH_TEST_PER_INTENT])
+    rng.shuffle(picked)
+    records = [
+        {
+            "id": f"fresh-{i:04d}",
+            "source_id": r["id"],
+            "query": r["query"],
+            "positive": r["positive"],
+            "intent": r["intent"],
+        }
+        for i, r in enumerate(picked)
+    ]
+    keys = {query_key(r["query"]) for r in records}
+    if keys & exposed or keys & train_keys or len(keys) != len(records):
+        raise ValueError("fresh test overlaps an exposed or training message")
+    digest = fresh_test_digest(records)
+    if verify and digest != FRESH_TEST_MANIFEST_SHA256:
+        raise ValueError(
+            f"fresh test manifest {digest[:16]}... differs from the pinned "
+            f"{FRESH_TEST_MANIFEST_SHA256[:16]}..."
+        )
+    reference = splits or exposed_splits
+    near = near_duplicate_pairs(
+        {"train": reference["train"], "validation": reference["validation"], "fresh_test": records},
+        evaluated=("fresh_test",),
+    )
+    pool_near = near_duplicate_pairs(
+        {"train": reference["train"], "validation": reference["validation"], "pool": clean},
+        evaluated=("pool",),
+        max_examples=0,
+    )
+    return {
+        "records": records,
+        "manifest": {
+            "source": f"test.csv at {CORPUS_RELEASE} (sha256 {CORPUS_FILES['test'][2]})",
+            "seed": FRESH_TEST_SEED,
+            "per_intent": FRESH_TEST_PER_INTENT,
+            "n": len(records),
+            "test_pool_after_filter": len(pool),
+            "exposed_tutorial": len(tutorial_keys),
+            "exposed_workshop_w16": len(workshop_keys),
+            "exposed_union": len(exposed),
+            "never_scored": len(never_scored),
+            "exact_repeats_of_train_csv_dropped": len(exact_repeats),
+            "near_duplicates_vs_train_validation": {
+                "threshold_jaccard": NEAR_DUPLICATE_JACCARD,
+                "in_fresh_test": near["near_duplicates"]["fresh_test"],
+                "in_clean_pool": pool_near["near_duplicates"]["pool"],
+                "examples": near["examples"],
+                "reported_not_removed": True,
+            },
+            "manifest_sha256": digest,
+        },
+    }
+
+
+# The pre-registered settings (docs/qwen3-embedding-preregistration.md). A run scores the fresh test only when
+# every one of them holds and the configuration is the one the validation grid selected in the same session.
+PREREGISTERED_SETTINGS: dict[str, Any] = {
+    "data_source": "banking77@57ec275d8078af65b7731c2a98be812d844a6d6b",
+    "split_seed": SAMPLE_SEED,
+    "sizes": {
+        "train": 616,
+        "validation": 154,
+        "exposed_development_test": 385,
+        "fresh_test": FRESH_TEST_SIZE,
+    },
+    "fresh_test_sha256": FRESH_TEST_MANIFEST_SHA256,
+    "instruction": DEFAULT_INSTRUCTION,
+    "epochs": 2,
+    "batch_size": 16,
+    "temperature": 0.05,
+    "max_train_tokens": 64,
+    "adapt_seed": 0,
+    "optimizer": "AdamW(weight_decay=0.01), clip 1.0, no scheduler",
+    "epoch_selection": "highest validation MRR",
+    "grid": "C0/C1/C2 on validation MRR, margin 0.02",
+}
+GRID_CONFIGS: dict[str, dict[str, Any]] = {
+    "C0": {"trainable_layers": 2, "lr": 5e-5},
+    "C1": {"trainable_layers": 2, "lr": 2e-5},
+    "C2": {"trainable_layers": 4, "lr": 2e-5},
+}
+GRID_MARGIN = 0.02
+# The first hosted pre-registered evaluation, once recorded (docs/release-verification.md). None until then.
+RECORDED_EVALUATION: dict[str, Any] | None = None
+
+
+def select_configuration(
+    val_mrr: Mapping[str, float], frozen_val_mrr: float, *, margin: float = GRID_MARGIN
+) -> dict[str, Any]:
+    """The pre-registered selection rule over best-epoch validation MRR.
+
+    C0 (2 layers @ 5e-5, the current default) is kept unless a challenger beats it by `margin`; C2 (4 layers,
+    twice the adapter) must also beat the best 2-layer configuration by `margin`. Within the margin, or on a
+    tie, the smaller/current configuration stays. The frozen model is kept unless the selected configuration
+    beats the frozen validation MRR by `margin`."""
+    missing = set(GRID_CONFIGS) - set(val_mrr)
+    if missing:
+        raise ValueError(f"grid results are missing {sorted(missing)}")
+    selected, reason = "C0", "no challenger beat C0 by the margin"
+    if val_mrr["C1"] >= val_mrr["C0"] + margin:
+        selected, reason = "C1", f"C1 beat C0 by >= {margin}"
+    best_two = max(val_mrr["C0"], val_mrr["C1"])
+    if val_mrr["C2"] >= val_mrr["C0"] + margin and val_mrr["C2"] >= best_two + margin:
+        selected, reason = "C2", f"C2 beat C0 and the best 2-layer configuration by >= {margin}"
+    keep_frozen = val_mrr[selected] < frozen_val_mrr + margin
+    return {
+        "config": selected,
+        "settings": dict(GRID_CONFIGS[selected]),
+        "reason": reason,
+        "keep_frozen": keep_frozen,
+        "selected_model": "frozen" if keep_frozen else f"adapted {selected}",
+        "val_mrr": {k: round(float(v), 6) for k, v in val_mrr.items()},
+        "frozen_val_mrr": round(float(frozen_val_mrr), 6),
+        "margin": margin,
+    }
+
+
+def preregistration_diff(settings: Mapping[str, Any], selection: Mapping[str, Any] | None) -> list[str]:
+    """The pre-registered settings a run does not hold (empty = pre-registered). `settings` also carries the
+    run's `configuration` ({trainable_layers, lr}); a missing setting counts as a difference, and so does a
+    session in which the validation grid did not run."""
+    differs = [key for key, value in PREREGISTERED_SETTINGS.items() if settings.get(key, object()) != value]
+    if selection is None:
+        differs.append("grid (not run in this session)")
+    elif settings.get("configuration", object()) != selection["settings"]:
+        differs.append("configuration")
+    return differs
+
+
+def test_look(
+    preregistered: bool, prior_looks: int, recorded: Mapping[str, Any] | None = RECORDED_EVALUATION
+) -> str:
+    """SCORE_ONCE item 5 label of a pass. A runtime cannot know about other runtimes: the first pre-registered
+    scoring in a runtime is "pre-registered evaluation (this runtime)" unless a hosted evaluation is already
+    recorded; later identical scorings are reproductions."""
+    if not preregistered:
+        return "not scored (exploratory)"
+    if prior_looks or recorded is not None:
+        return "reproduction"
+    return "pre-registered evaluation (this runtime)"
+
+
+test_look.__test__ = False  # not a pytest test
+
+
+# ---- Transfer check (optional, display only; R72-M2 ruling) ------------------------------------------------
+
+TRANSFER_NAME = "CLINC150 (Larson et al., 2019): in-scope test queries -> intent phrases"
+TRANSFER_RELEASE = "clinc/oos-eval @ 828f8093932c8fe6ca7936c3d2e52903b1c523de"
+TRANSFER_URL = "https://raw.githubusercontent.com/clinc/oos-eval/828f8093932c8fe6ca7936c3d2e52903b1c523de/data/data_full.json"
+TRANSFER_FILE = (
+    "data_full.json",
+    2_495_390,
+    "36923c3705a59e08fe9c3883d8bc2dd966ef93e22cb78ac41171782a698d56e0",
+)
+TRANSFER_LICENSE = "CC BY 3.0 (Larson et al. 2019; clinc/oos-eval LICENSE)"
+TRANSFER_INTENTS = 150
+TRANSFER_PER_INTENT = 2
+TRANSFER_SEED = 20_261_017
+TRANSFER_INSTRUCTION = "Given a request to a virtual assistant, retrieve the intent it expresses"
+TRANSFER_MANIFEST_SHA256 = "2f45326ae57c93c79a65f090be7a7623507415298613a15eb6553f960cfb9577"
+# The `banking` and `credit_cards` domains of CLINC150 (data/domains.json at the pinned commit, sha256
+# b947b579d3b8e74b06f93b01083d8efaff2888b43a3e362533bd88a6e1211b3a): near Banking77's own domain, so the
+# transfer check reports them apart from the other 8 domains (peer review F1, 2026-10-18).
+TRANSFER_NEAR_DOMAINS = ("banking", "credit_cards")
+TRANSFER_NEAR_INTENTS = frozenset(
+    (
+        "account_blocked",
+        "application_status",
+        "apr",
+        "balance",
+        "bill_balance",
+        "bill_due",
+        "card_declined",
+        "credit_limit",
+        "credit_limit_change",
+        "credit_score",
+        "damaged_card",
+        "expiration_date",
+        "freeze_account",
+        "improve_credit_score",
+        "interest_rate",
+        "international_fees",
+        "min_payment",
+        "new_card",
+        "order_checks",
+        "pay_bill",
+        "pin_change",
+        "redeem_rewards",
+        "replacement_card_duration",
+        "report_fraud",
+        "report_lost_card",
+        "rewards_balance",
+        "routing",
+        "spending_history",
+        "transactions",
+        "transfer",
+    )
+)
+TRANSFER_GROUPS = ("near-domain (CLINC banking + credit_cards)", "other 8 domains")
+
+
+def fetch_transfer_corpus(*, cache_dir: str | Path | None = None, fetcher: Any = None) -> bytes:
+    """The pinned CLINC150 data_full.json (bytes), refused on any size or SHA-256 mismatch."""
+    name, size, digest = TRANSFER_FILE
+    cache = Path(cache_dir) if cache_dir is not None else Path("weights") / "clinc150"
+    cache.mkdir(parents=True, exist_ok=True)
+    local = cache / name
+    data = local.read_bytes() if local.is_file() else b""
+    if len(data) != size or _sha256_bytes(data) != digest:
+        if fetcher is not None:
+            data = fetcher(TRANSFER_URL)
+        else:
+            with urllib.request.urlopen(TRANSFER_URL, timeout=120) as response:  # noqa: S310 (pinned https URL)
+                data = response.read()
+        if len(data) != size or _sha256_bytes(data) != digest:
+            raise ValueError(
+                f"{name}: fetched {len(data)} bytes with sha256 {_sha256_bytes(data)[:16]}..., "
+                f"pinned {size} / {digest[:16]}..."
+            )
+        local.write_bytes(data)
+    return data
+
+
+def build_transfer_set(data: bytes, *, verify: bool = True) -> dict[str, Any]:
+    """2 in-scope test queries per CLINC150 intent (300) and the 150 intent phrases, by a seeded draw."""
+    rows = json.loads(data.decode("utf-8"))["test"]
+    by_intent: dict[str, list[tuple[int, str]]] = {}
+    for i, (text, intent) in enumerate(rows):
+        by_intent.setdefault(str(intent), []).append((i, str(text).strip()))
+    if len(by_intent) != TRANSFER_INTENTS:
+        raise ValueError(f"CLINC150 test: {len(by_intent)} intents, expected {TRANSFER_INTENTS}")
+    rng = random.Random(TRANSFER_SEED)
+    records = []
+    for intent in sorted(by_intent):
+        pool = sorted(by_intent[intent])
+        rng.shuffle(pool)
+        for index, text in pool[:TRANSFER_PER_INTENT]:
+            records.append(
+                {
+                    "id": f"clinc-test-{index:04d}",
+                    "query": text,
+                    "positive": intent_phrase(intent),
+                    "intent": intent,
+                }
+            )
+    docs = documents(records)
+    if len(docs) != TRANSFER_INTENTS:
+        raise ValueError("CLINC150 intent phrases are not unique")
+    digest = dataset_digest(records)
+    if verify and digest != TRANSFER_MANIFEST_SHA256:
+        raise ValueError(
+            f"transfer set manifest {digest[:16]}... differs from the pinned "
+            f"{TRANSFER_MANIFEST_SHA256[:16]}..."
+        )
+    groups = {}
+    for label in TRANSFER_GROUPS:
+        near = label == TRANSFER_GROUPS[0]
+        part = [r for r in records if (r["intent"] in TRANSFER_NEAR_INTENTS) == near]
+        groups[label] = {"records": part, "documents": documents(part)}
+    return {"records": records, "documents": docs, "manifest_sha256": digest, "groups": groups}

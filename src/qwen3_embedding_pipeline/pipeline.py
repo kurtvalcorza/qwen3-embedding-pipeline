@@ -402,12 +402,39 @@ class Qwen3EmbeddingPipeline:
                 "instruction": instruction,
                 "verdict": "measured" if len(checked) >= MIN_SCORED_RECORDS else "measured-small-sample",
                 "adapted": self.adapter is not None,
+                "ranks": ranks,
                 "seconds": round(time.perf_counter() - started, 3),
                 "model_id": MODEL_ID,
                 "model_revision": MODEL_REVISION,
             }
         )
         return metrics
+
+    def evaluate_base(
+        self,
+        records: Sequence[Mapping[str, Any]],
+        *,
+        instruction: str = DEFAULT_QUERY_INSTRUCTION,
+        candidates: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """`evaluate` on the pinned base without losing the current adaptation: the adapted tensors are kept
+        in memory, the base is put back for the evaluation, and the adapted tensors and `adapter` are
+        restored after it (also when it fails)."""
+        if self.adapter is None or self._model is None:
+            return self.evaluate(records, instruction=instruction, candidates=candidates)
+        adapter = self.adapter
+        names = list(adapter["trainable_names"])
+        state = self._model.state_dict()
+        kept = {name: state[name].detach().clone() for name in names}
+        self.restore_base()
+        try:
+            return self.evaluate(records, instruction=instruction, candidates=candidates)
+        finally:
+            merged = dict(self._model.state_dict())
+            merged.update(kept)
+            self._model.load_state_dict(merged, strict=True)
+            self._model.eval()
+            self.adapter = adapter
 
     @staticmethod
     def lexical_baseline(

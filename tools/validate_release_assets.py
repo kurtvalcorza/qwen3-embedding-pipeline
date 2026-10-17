@@ -1,6 +1,6 @@
 """Static release-asset validation for the Qwen3-Embedding-0.6B DIMER pipeline.
 
-Checks the STANDALONE tutorial notebook (DIMER Notebook Specification 2.2 §4), the tutorial
+Checks the STANDALONE tutorial notebook (DIMER Notebook Specification 2.5 §4), the tutorial
 registry, model card, README, STATUS.md and weight documentation for source conformance and
 cross-document identity consistency, and runs the generator parity checks (PAR1–PAR3).
 
@@ -33,10 +33,12 @@ BYOD_GATES = ("USE_BYOD",)
 EXPECTED_OUTPUTS = (
     "outputs/qwen3_embedding_train.csv",
     "outputs/qwen3_embedding_input_manifest.json",
-    "outputs/qwen3_embedding_evaluation_report.json",
-    "outputs/qwen3_embedding_retrieval.csv",
-    "outputs/qwen3_embedding_adapter",
-    "outputs/qwen3_embedding_result.json",
+    "outputs/qwen3_embedding_evaluation_report{run_tag}.json",
+    "outputs/qwen3_embedding_retrieval{adapter_tag}.csv",
+    "outputs/qwen3_embedding_adapter{adapter_tag}",
+    "outputs/qwen3_embedding_result{run_tag}.json",
+    "outputs/qwen3_embedding_grid_validation{grid_tag}.json",
+    "outputs/qwen3_embedding_transfer_check{adapter_tag}.json",
 )
 CODE_MARKERS = (
     # Stage 4: pinned corpus, validation, document set, disjoint split, CSV, refusal probes
@@ -46,8 +48,16 @@ CODE_MARKERS = (
     "corpus = read_corpus(fetch_corpus(cache_dir='weights/banking77'))",
     "splits = build_sample_dataset(corpus, seed=SPLIT_SEED)",
     "records = load_byod_dataset(byod_path)",
+    # DAT20: BYOD refusals are one message; the earlier split is dropped before the new one is built
+    "except (OSError, TypeError, ValueError, KeyError) as exc:",
+    "raise DatasetRefused(f'BYOD refused: ",
+    "globals().pop(_stale, None)",
+    # R72-M1/s2: the pinned fresh test and the exposed development test
+    "fresh = build_fresh_test(corpus, splits)",
+    "check_split_disjoint({'train': train_records, 'validation': val_records, 'fresh_test': fresh_records})",
+    "report_records = exposed_records if report_on_exposed else val_records",
     "dataset_manifests = {name: validate_dataset(part) if name == 'train' else validate_dataset(part, min_records=1) for name, part in splits.items()}",
-    "document_set = documents([*train_records, *val_records, *test_records])",
+    "document_set = documents([*train_records, *val_records, *exposed_records])",
     "disjoint = check_split_disjoint(splits)",
     "write_dataset_csv(train_records, 'outputs/qwen3_embedding_train.csv')",
     # Stage 5: the embedding contract with its manifest, rejection probe and sanity checks
@@ -61,27 +71,52 @@ CODE_MARKERS = (
     "before = dict(zip([r['id'] for r in probe_records], top_documents(query_vectors, doc_vectors), strict=True))",
     # Stage 6: the random floor, the lexical baseline and the frozen retrieval metrics
     "floor = random_floor(len(document_set))",
-    "baseline_lexical = pipe.lexical_baseline(test_records, document_set)",
-    "frozen_test = pipe.evaluate(test_records, instruction=INSTRUCTION, candidates=document_set)",
-    "if frozen_test['n_documents'] != baseline_lexical['n_documents']:",
-    "frozen_vs_floor = 'above' if frozen_test['mrr'] > floor['mrr'] else 'not above'",
+    "baseline_lexical = pipe.lexical_baseline(report_records, document_set)",
+    "frozen_report = pipe.evaluate(report_records, instruction=INSTRUCTION, candidates=document_set)",
+    "frozen_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)",
+    "if frozen_report['n_documents'] != baseline_lexical['n_documents']:",
+    # DOC11: the stop reads validation
+    "frozen_vs_floor = 'above' if frozen_val['mrr'] > val_floor['mrr'] else 'not above'",
+    # R72-M1: the pre-registered validation grid
+    "grid_selection = select_configuration(",
+    "for name, config in GRID_CONFIGS.items():",
     # Stage 7: bounded contrastive fine-tuning with explicit hyperparameters
     "adapt_result = pipe.adapt(",
-    "trainable_layers=TRAINABLE_LAYERS",
-    "lr=LEARNING_RATE",
+    "trainable_layers=layers",
+    "lr=lr",
+    "seed=ADAPT_SEED",
+    # R72-M3: score-once wiring over every pre-registered setting
+    "settings_differing = preregistration_diff(run_settings, globals().get('grid_selection'))",
+    "preregistered = not settings_differing",
+    "look = test_look(preregistered, fresh_looks)",
+    "frozen_fresh = pipe.evaluate_base(fresh_records, instruction=INSTRUCTION, candidates=document_set)",
+    "'paired_mrr': paired_rank_comparison(frozen_fresh['ranks'], adapted_fresh['ranks']) if adapted_fresh else None,",
+    "run_tag = f'_exploratory_{exploratory_runs}'",
+    "'test_look': look,",
+    "'settings_differing': settings_differing,",
     "temperature=TEMPERATURE",
     "instruction=INSTRUCTION",
     # Stage 8: held-out evaluation, comparison, assertion
-    "adapted_test = pipe.evaluate(test_records, instruction=INSTRUCTION, candidates=document_set)",
-    "adapted_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=documents(val_records))",
+    "adapted_report = pipe.evaluate(report_records, instruction=INSTRUCTION, candidates=document_set)",
+    "adapted_val = pipe.evaluate(val_records, instruction=INSTRUCTION, candidates=val_documents)",
     "'delta_vs_frozen'",
-    "comparison['verdict'] = {'adapted_vs_frozen_mrr': 'improved' if delta_mrr > 0 else ('no change' if delta_mrr == 0 else 'worse'), 'frozen_vs_random_floor_mrr': frozen_vs_floor}",
+    "comparison['verdict'] = {'adapted_vs_frozen_mrr': direction(delta_mrr), 'adapted_vs_frozen_validation_mrr': direction(delta_val_mrr), 'frozen_vs_random_floor_validation_mrr': frozen_vs_floor}",
+    "keep_frozen = bool(preregistered and grid_selection['keep_frozen'])",
+    "if not USE_BYOD and preregistered and not keep_frozen and comparison['verdict']['adapted_vs_frozen_validation_mrr'] != 'improved':",
+    "adapter_tag = run_tag + ('_not_selected' if globals().get('grid_selection') and grid_selection['keep_frozen'] else '')",
+    "'paired_mrr_intent_cluster': paired_cluster_comparison(frozen_fresh['ranks'], adapted_fresh['ranks'], [r['intent'] for r in fresh_records]) if adapted_fresh else None,",
+    "grid_runs = globals().get('grid_runs', 0) + 1",
+    "preregistered, settings_differing = False, ['section 7b did not finish']",
     "'verdict': comparison['verdict']",
     # Stage 9: retrieval before/after, batch report, artifact, reload parity, provenance
     "single_report = evaluation_report(",
     "pipe.save_artifact(artifact_dir, metadata=",
     "reloaded = Qwen3EmbeddingPipeline.from_artifact(artifact_dir, weights_dir=WEIGHTS_DIR, device=pipe.device)",
-    "assert parity['query_vectors_identical'] and abs(in_memory_test['mrr'] - reloaded_test['mrr']) < 1e-9",
+    "assert parity['query_vectors_identical'] and abs(in_memory_val['mrr'] - reloaded_val['mrr']) < 1e-9",
+    # R72-M2: the optional transfer check (display only)
+    "transfer = build_transfer_set(fetch_transfer_corpus(cache_dir='weights/clinc150'))",
+    "for label, group in transfer['groups'].items():",
+    "g_frozen = pipe.evaluate_base(group['records'], instruction=TRANSFER_INSTRUCTION, candidates=group['documents'])",
     "weight_entry = next(entry for entry in snapshot['files'] if entry['path'] == WEIGHT_FILE)",
     "'weight_format': 'safetensors, digest-verified'",
     "'corpus': {'name': CORPUS_NAME, 'release': CORPUS_RELEASE, 'base_url': CORPUS_BASE_URL",
@@ -100,7 +135,16 @@ MARKDOWN_MARKERS = (
     "**lexical baseline**",
     "**cosine is a similarity, not a probability**",
     "**InfoNCE**",
-    "no dispersion estimate",
+    "not seed-to-seed variation",
+    "**Training-data overlap (DAT9).**",
+    "**Pre-registered evaluation protocol (2026-10-17).**",
+    "**exposed development test**",
+    "**only under the exact pre-registered settings**",
+    "predeclared practical tolerance",
+    "## 10. Optional transfer check: CLINC150 (display only)",
+    "> **⚠️ Notice.** For research, training and evaluation only.",
+    "`DIMER_ISOLATED_ENV`",
+    "**Kind:** `TUTORIAL`",
     "**every vector changes**",
     "reranking (see the sibling Qwen3 reranker pipeline), text generation or chat, classification heads",
     "CC BY 4.0 (Casanueva et al., 2020)",
@@ -133,10 +177,10 @@ INSTALL_CELL_MARKER = "# dimer: kernel cell"
 # ---------------------------------------------------------------------------
 # Shared checks. Everything below is source/structure validation only. Passing
 # these checks is NOT clean-runtime execution evidence under DIMER Notebook
-# Specification 2.2; see docs/release-verification.md for the release gate.
+# Specification 2.5; see docs/release-verification.md for the release gate.
 # ---------------------------------------------------------------------------
 
-NOTEBOOK_SPEC = "2.2"
+NOTEBOOK_SPEC = "2.5"
 ALLOWED_PROFILES = {"E2E", "ARTIFACT-INFERENCE", "TASK-INFERENCE", "MULTI-CAPABILITY", "SMOKE"}
 STATUS_TOKENS = ("Candidate", "Release-grade")
 PLACEHOLDER = re.compile(r"\b(TODO|TBD|FIXME)\b|Insert text here|Tooltip:", re.I)
@@ -212,7 +256,7 @@ COMMON_MARKDOWN_MARKERS = (
     "without the repository being",
     "It does **not** establish benchmark superiority",
     "## References",
-    f"- Repository model card: https://github.com/kurtvalcorza/{REPO_NAME}/blob/main/MODEL_CARD.md",
+    f"Available: https://github.com/kurtvalcorza/{REPO_NAME} (README.md, MODEL_CARD.md",
 )
 # Patterns that must never appear in tutorial code (comment-stripped), in any cell.
 FORBIDDEN_PATTERNS = (

@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 GENERATOR_VERSION = "build_notebook.py/2.2"
-NOTEBOOK_SPEC = "2.2"
+NOTEBOOK_SPEC = "2.5"
 
 # ST2: default rewrite rule; a template may replace it with its own `rewrites` list. Every rule must
 # match exactly once across the embedded modules, so a silent no-op is impossible.
@@ -317,6 +317,9 @@ while True:
         _send.send(("done",))
     except BaseException as exc:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
+        if getattr(exc, "dimer_refusal", False):
+            _send.send(("refusal", str(exc)))
+            continue
         frames = exc.__traceback__.tb_next if exc.__traceback__ is not None else None
         _send.send(("error", "".join(traceback.format_exception(type(exc), exc, frames)), f"{type(exc).__name__}: {exc}"))
 """
@@ -324,6 +327,13 @@ while True:
 
 class IsolatedCellError(RuntimeError):
     """A routed cell raised inside the isolated environment; its traceback is printed above."""
+
+
+class IsolatedCellRefusal(RuntimeError):
+    """An expected refusal of the data the learner supplied (DAT20): IPython shows the message, not a traceback."""
+
+    def _render_traceback_(self):
+        return [str(self)]
 
 
 class IsolatedRuntime:
@@ -380,6 +390,8 @@ class IsolatedRuntime:
                 self._display(message[1], raw=True)
             elif kind == "upload":
                 self._send.send(("upload", self._colab_upload()))
+            elif kind == "refusal":
+                raise IsolatedCellRefusal(message[1]) from None
             elif kind == "error":
                 sys.stderr.write(message[1])
                 raise IsolatedCellError(message[2]) from None
@@ -696,6 +708,29 @@ def _head_revision(repo: Path) -> str:
     return out or "uncommitted"
 
 
+def check_revision_holds_modules(repo: Path, revision: str, per_module_sha256: dict[str, str]) -> None:
+    """Refuse to stamp `revision` unless `git show <revision>:<module>` has each carried module's SHA-256 (ST5).
+
+    Generating in a working tree whose package modules are not committed would otherwise name a commit that does
+    not contain the carried code (review finding R72-m2): commit the package first, then regenerate."""
+    stale = []
+    for rel, digest in per_module_sha256.items():
+        try:
+            blob = subprocess.run(
+                ["git", "-C", str(repo), "show", f"{revision}:{rel}"], capture_output=True, check=True
+            ).stdout
+        except (OSError, subprocess.CalledProcessError):
+            stale.append(rel)
+            continue
+        if hashlib.sha256(blob).hexdigest() != digest:
+            stale.append(rel)
+    if stale:
+        raise SystemExit(
+            f"revision {revision[:12]} does not hold the carried bytes of {stale}: commit the package modules, "
+            "then regenerate the notebook in a later commit"
+        )
+
+
 def recorded_revision(notebook_path: Path) -> str | None:
     """`generated_from.revision` of an existing notebook, or None."""
     if not notebook_path.exists():
@@ -830,6 +865,8 @@ def _declarations(template: dict[str, Any]) -> tuple[str, str, str]:
 
 def render(repo: Path, template: dict[str, Any], revision: str | None = None) -> dict[str, Any]:
     ctx = load_context(repo, template, revision)
+    if revision is None and ctx["module_revision"] != "uncommitted":
+        check_revision_holds_modules(repo, ctx["module_revision"], ctx["per_module_sha256"])
     mode, run_all, byod = _declarations(template)
     stem = template["stem"]
     fmt = {"stem": stem, **{k: ctx[k] for k in ("MODEL_ID", "MODEL_REVISION", "MODEL_LICENSE", "MODEL_KEY")}}
@@ -849,9 +886,11 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
     )
     header = (
         f"# {template['title']}\n\n{badges}\n\n"
-        f"**Profile:** `{template['profile']}`  \n"
+        + (f"{template['use_notice'].strip()}\n\n" if template.get("use_notice") else "")
+        + f"**Profile:** `{template['profile']}`  \n"
         f"**Mode:** `{mode}`  \n"
-        f"**Notebook specification:** DIMER Notebook Specification {NOTEBOOK_SPEC} — **standalone** (§4)  \n"
+        + (f"**Kind:** `{template['notebook_kind']}`  \n" if template.get("notebook_kind") else "")
+        +         f"**Notebook specification:** DIMER Notebook Specification {NOTEBOOK_SPEC} — **standalone** (§4)  \n"
         f"**Capability:** {template['capability']}\n\n"
         f"**This notebook is standalone.** It carries {carried}, the pinned model identity and the per-file SHA-256 manifest in Section 3, "
         f"and the exact runtime pins in Section 1, so it keeps working after export even if the repository changes or disappears. Its only "
@@ -922,7 +961,9 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
                 "pins in the cell) with `--require-hashes --only-binary :all:`, so every package, direct or transitive, is the exact "
                 "file that was locked. No repository code is installed. The lock holds manylinux x86_64 wheels, so the notebook "
                 "supports **Linux x86_64 runtimes only** (Google Colab, Kaggle or Linux Jupyter); on any other platform the cell "
-                "stops with that message.\n\n"
+                "stops with that message. To build the environment somewhere else, set the environment variable "
+                "`DIMER_ISOLATED_ENV` to a directory before **Run all** (default `dimer_isolated_env_<lock digest>/` in the "
+                "working directory); it changes only where the environment lives, not what is installed.\n\n"
                 "The same cell then starts one Python process in that environment and routes **every later code cell** to it. "
                 "Printed output comes back to the notebook as usual, variables persist from cell to cell, and an error stops "
                 "**Run all** as it would in the kernel. It is the only cell that runs in the kernel (it is marked "
@@ -1065,6 +1106,7 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
             "dimer": {
                 "notebook_profile": template["profile"],
                 "notebook_mode": mode,
+                **({"notebook_kind": template["notebook_kind"]} if template.get("notebook_kind") else {}),
                 "notebook_spec": NOTEBOOK_SPEC,
                 "standalone": True,
                 **({"environment": "isolated hash-locked uv environment; nothing installed into the kernel"} if isolated else {}),
