@@ -168,6 +168,61 @@ The Notebook Review Framework v1 review of `f9f5c81` (`docs/reviews/`) found fou
 
 Local checks (pytest, Ruff, the validator, both generator `--check`s, and a CPU real-weights run of the regenerated cells with the install skipped) are not clean-runtime evidence. On 2026-10-09 the review-fix blob `26a62b80` (commit `6606b82`) completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-09 (Colab CLI sequential execution, 12/12 code cells, 201.4 s; held-out recall@1 0.6312 → 0.7662, MRR 0.741 → 0.8498; reload parity exact) — row at the top of *Recorded executions*. That closes the no-restart gate (RUN10/ENV6) for the default path on Colab T4. BYOD on a hosted runtime (REL12) and the activity were not run, so status stays **Candidate** (REL14).
 
+### 2026-10-17 row-72 review fixes (R72-M1..M3, R72-m1..m3)
+
+Pre-registration committed alone first: `docs/qwen3-embedding-preregistration.md` (validation grid C0/C1/C2, margin 0.02,
+keep-frozen rule, the pinned 770-query fresh test, score-once wiring, the CLINC150 transfer check). The 385 seed-42 test
+queries are the **exposed development test** from this revision on; every number quoted above for them was measured after
+the old default had been chosen on them.
+
+**Fresh test.** test.csv after filtering 3,079 → minus 516 exposed (tutorial 385 + workshop W16 154, 23 shared) → 2,563
+never scored → minus 22 exact repeats of a train.csv message under `query_key` (the review's normalisation found 7; all 7
+are among the 22) → 10 per intent, `random.Random(20261017)` → 770, manifest SHA-256
+`fe68b43ae56b9092ab92f6eeb610b2179222d1dfa04c3eebd9c658ac69c0908f`. Near-paraphrases (token Jaccard ≥ 0.8 vs the training/validation draw) are
+reported, not removed: 39 in the clean pool, 10 in the draw.
+
+**Development looks at the fresh test: none.** Following SCORE_ONCE_RULE item 8, the fixer's CPU check below ran with
+the fresh test masked (built and digest-checked, never scored; a guard aborted the run if any fresh query reached
+`evaluate`). The first hosted T4 run of the pre-registered settings is the evaluation of record; later identical hosted
+runs are reproductions. `samples.RECORDED_EVALUATION` stays `None` until that run is recorded here.
+
+**CPU build record (validation + exposed development test only).** Windows workstation, CPython 3.12, `torch 2.14.0+cpu`,
+`transformers 4.57.6`, float32, `CUDA_VISIBLE_DEVICES=-1`, uncommitted working tree on branch
+`fix/qwen3-embedding-tutorial-review-2026-10-17`, 2026-10-18 (its package logic is that of commit `a93f99e`; the
+edits made before that commit were docstring and line wrapping only). Not a hosted run;
+timings are on a shared machine.
+
+| Config | Layers | LR | Best epoch | Val recall@1 | Val MRR | Train + val s |
+|---|---|---|---|---|---|---|
+| C0 | 2 | 5e-05 | 2 | 0.7273 | 0.8284 | 417 |
+| C1 | 2 | 2e-05 | 2 | 0.6818 | 0.7962 | 518 |
+| C2 | 4 | 2e-05 | 2 | 0.7208 | 0.8270 | 554 |
+
+Frozen validation MRR 0.6991. Selection: **C0** (no challenger beat C0 by the margin); selected model
+`adapted C0`. Retraining the selected configuration reproduced the grid row exactly (same
+per-epoch validation MRR).
+
+| Split (CPU, float32) | Frozen recall@1 | Frozen MRR | Adapted recall@1 | Adapted MRR |
+|---|---|---|---|---|
+| Validation (154) | 0.5844 | 0.6991 | 0.7273 | 0.8284 |
+| Exposed development test (385) | 0.6338 | 0.7422 | 0.8026 | 0.8785 |
+
+Exposed development test, paired MRR difference 0.1363 (bootstrap 95 % CI 0.1069 to
+0.1664; 115 queries improved, 21 worse); lexical baseline recall@1
+0.3065. Old → new on the exposed development test: the selected configuration is
+C0, so the adapted numbers are those of the old default's configuration retrained under the same fixed settings
+(old CPU build record at `9bcb449`: frozen 63.4 % → adapted 80.3 % recall@1, MRR 0.742 → 0.879).
+
+**Transfer check (CLINC150, display only).** 300 queries / 150 intent phrases, digest `2f45326a…`:
+frozen recall@1 0.6600, MRR 0.7608; adapted recall@1 0.6667,
+MRR 0.7641; paired MRR difference 0.0033 (95 % CI -0.0143 to 0.0217);
+lexical recall@1 0.2933, random-floor MRR 0.0373. CPU stage times: frozen
+evaluation 72.6 s, grid 1488.3 s, selected retrain 372.1 s, adapted evaluation
+72.5 s, transfer 51.0 s.
+
+**Open:** the hosted T4 run of the regenerated blob (the evaluation of record for the fresh test, the hosted grid and the
+transfer check); hosted BYOD (REL12). Status stays **Candidate**.
+
 ## Qwen3 semantic search and reranking notebook — 2026-09-26 follow-up
 
 This record concerns `DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb` on PR #8, separately from the primary E2E embedding tutorial above. Assessment used fleet NOTEBOOK_SPEC 2.2 (blob `046d866eac7cc67b1539a4ba370ebc965341c87b`) and this repository's search/reranking specification. The compatible 2.1 declaration remains; the 2.2 guided recommendations do not change mandatory profile semantics.
