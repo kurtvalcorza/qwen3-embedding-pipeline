@@ -530,6 +530,11 @@ def workshop_w16_queries(corpus: Mapping[str, Sequence[Mapping[str, Any]]]) -> l
     return out
 
 
+FRESH_TEST_2_SEED = 20_261_018
+FRESH_TEST_2_MANIFEST_SHA256 = "cd0171285dfd6ccc72b88d82b43ad856af6869a84a49cc50ac06046119f37a63"
+FRESH_TEST_1_LABEL = "fresh test 1 (scored once, 2026-10-17, bf16 recipe; now an exposed test)"
+
+
 def fresh_test_digest(records: Sequence[Mapping[str, Any]]) -> str:
     """Manifest SHA-256 of a fresh-test draw: the sorted (source id, query) pairs."""
     payload = sorted([str(r["source_id"]), str(r["query"])] for r in records)
@@ -632,7 +637,8 @@ PREREGISTERED_SETTINGS: dict[str, Any] = {
         "exposed_development_test": 385,
         "fresh_test": FRESH_TEST_SIZE,
     },
-    "fresh_test_sha256": FRESH_TEST_MANIFEST_SHA256,
+    "fresh_test_sha256": FRESH_TEST_2_MANIFEST_SHA256,
+    "precision": "float32",
     "instruction": DEFAULT_INSTRUCTION,
     "epochs": 2,
     "batch_size": 16,
@@ -649,8 +655,26 @@ GRID_CONFIGS: dict[str, dict[str, Any]] = {
     "C2": {"trainable_layers": 4, "lr": 2e-5},
 }
 GRID_MARGIN = 0.02
-# The first hosted pre-registered evaluation, once recorded (docs/release-verification.md). None until then.
-RECORDED_EVALUATION: dict[str, Any] | None = None
+# The evaluation of record per recipe (docs/release-verification.md). Recipe 1 (bf16 CUDA training) was
+# scored on fresh test 1 by the hosted T4 run of 2026-10-17; recipe 2 (float32, fresh test 2) is None until
+# its first hosted pre-registered run is recorded. Later identical runs of a recipe are reproductions.
+RECIPE_1 = "recipe 1 (bf16 CUDA training; fresh test 1)"
+RECIPE = "recipe 2 (float32 on every device; fresh test 2)"
+RECORDED_EVALUATIONS: dict[str, dict[str, Any] | None] = {
+    RECIPE_1: {
+        "executor": "Colab CLI 0.7.4, fresh Colab Tesla T4, cuda:0 bfloat16",
+        "date": "2026-10-17",
+        "commit": "1cc43edb4e4c7ade0df8b3e71e1098d7d50a6119",
+        "blob": "971187e6a67b878a6ce11c19c0b297c9d512d719",
+        "fresh_test_sha256": FRESH_TEST_MANIFEST_SHA256,
+        "fresh_mrr": {"frozen": 0.7338, "adapted": 0.8455},
+        "paired_delta_mrr": 0.1118,
+        "ci95_queries": [0.0911, 0.134],
+        "ci95_intents": [0.0711, 0.1569],
+    },
+    RECIPE: None,
+}
+RECORDED_EVALUATION: dict[str, Any] | None = RECORDED_EVALUATIONS[RECIPE]
 
 
 def select_configuration(
@@ -828,3 +852,80 @@ def build_transfer_set(data: bytes, *, verify: bool = True) -> dict[str, Any]:
         part = [r for r in records if (r["intent"] in TRANSFER_NEAR_INTENTS) == near]
         groups[label] = {"records": part, "documents": documents(part)}
     return {"records": records, "documents": docs, "manifest_sha256": digest, "groups": groups}
+
+
+def build_fresh_test_2(
+    corpus: Mapping[str, Sequence[Mapping[str, Any]]],
+    splits: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    *,
+    verify: bool = True,
+) -> dict[str, Any]:
+    """Fresh test 2 (pre-registration amendment 1): 10 per intent from the test.csv messages no run has
+    scored.
+
+    Excluded: the exposed development test (385), the workshop W16's 154, every exact `query_key` repeat of a
+    train.csv message, and fresh test 1 (770, scored once on 2026-10-17). `verify` refuses any draw whose
+    manifest SHA-256 is not FRESH_TEST_2_MANIFEST_SHA256."""
+    exposed_splits = build_sample_dataset(corpus, seed=SAMPLE_SEED)
+    fresh_1 = build_fresh_test(corpus, exposed_splits, verify=verify)["records"]
+    excluded = (
+        {query_key(r["query"]) for r in exposed_splits["test"]}
+        | {query_key(r["query"]) for r in workshop_w16_queries(corpus)}
+        | {query_key(r["query"]) for r in filter_records(corpus["train"])}
+        | {query_key(r["query"]) for r in fresh_1}
+    )
+    pool = filter_records(corpus["test"])
+    clean = [r for r in pool if query_key(r["query"]) not in excluded]
+    rng = random.Random(FRESH_TEST_2_SEED)
+    picked = []
+    for intent in sorted({r["intent"] for r in pool}):
+        candidates = sorted((r for r in clean if r["intent"] == intent), key=lambda r: r["id"])
+        rng.shuffle(candidates)
+        if len(candidates) < FRESH_TEST_PER_INTENT:
+            raise ValueError(f"fresh test 2: only {len(candidates)} never-scored messages for {intent!r}")
+        picked.extend(candidates[:FRESH_TEST_PER_INTENT])
+    rng.shuffle(picked)
+    records = [
+        {
+            "id": f"fresh2-{i:04d}",
+            "source_id": r["id"],
+            "query": r["query"],
+            "positive": r["positive"],
+            "intent": r["intent"],
+        }
+        for i, r in enumerate(picked)
+    ]
+    keys = {query_key(r["query"]) for r in records}
+    if keys & excluded or len(keys) != len(records):
+        raise ValueError("fresh test 2 overlaps an exposed, training or fresh-test-1 message")
+    digest = fresh_test_digest(records)
+    if verify and digest != FRESH_TEST_2_MANIFEST_SHA256:
+        raise ValueError(
+            f"fresh test 2 manifest {digest[:16]}... differs from the pinned "
+            f"{FRESH_TEST_2_MANIFEST_SHA256[:16]}..."
+        )
+    reference = splits or exposed_splits
+    near = near_duplicate_pairs(
+        {"train": reference["train"], "validation": reference["validation"], "fresh_test_2": records},
+        evaluated=("fresh_test_2",),
+    )
+    return {
+        "records": records,
+        "fresh_test_1": fresh_1,
+        "manifest": {
+            "source": f"test.csv at {CORPUS_RELEASE} (sha256 {CORPUS_FILES['test'][2]})",
+            "seed": FRESH_TEST_2_SEED,
+            "per_intent": FRESH_TEST_PER_INTENT,
+            "n": len(records),
+            "clean_pool": len(clean),
+            "excluded": len(excluded & {query_key(r["query"]) for r in pool}),
+            "near_duplicates_vs_train_validation": {
+                "threshold_jaccard": NEAR_DUPLICATE_JACCARD,
+                "in_fresh_test_2": near["near_duplicates"]["fresh_test_2"],
+                "examples": near["examples"],
+                "reported_not_removed": True,
+            },
+            "manifest_sha256": digest,
+            "fresh_test_1_label": FRESH_TEST_1_LABEL,
+        },
+    }

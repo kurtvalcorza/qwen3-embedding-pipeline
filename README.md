@@ -73,3 +73,5 @@ This repository's code is Apache-2.0 (`LICENSE`). The packaged upstream weights 
 ## AI Assistance Disclosure
 
 This repository’s code and accompanying documentation were developed with generative AI assistance for code development and technical writing under maintainer direction. The maintainer remains responsible for reviewing the implementation, validating results, and making release decisions. AI assistance does not constitute independent verification, provider endorsement, or release approval.
+
+**Pre-registration amendment 1 (2026-10-18):** the CUDA path loaded bfloat16 weights and stepped AdamW on them (recipe 1), which cost 0.04–0.10 validation MRR against CPU float32; recipe 2 loads, trains and evaluates in float32 on every device, and a second pinned fresh test (770 never-scored messages, manifest `cd017128…`) is the pre-registered evaluation for it. The 2026-10-17 T4 run stays the record for recipe 1 on fresh test 1, which is now an exposed test (`docs/qwen3-embedding-preregistration-amendment-2026-10-18.md`). The recipe-2 hosted run is pending.

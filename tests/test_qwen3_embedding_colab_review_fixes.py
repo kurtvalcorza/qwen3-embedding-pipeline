@@ -270,4 +270,4 @@ def test_r72_m3_notebook_declares_spec_2_5(notebook):
     md = _markdown(notebook)
     assert "DIMER Notebook Specification 2.5" in md and "DIMER Notebook Specification 2.2" not in md
     # REL13: each quoted value is labelled with the run it came from.
-    assert md.count("previous blob `26a62b80`") >= 3
+    assert md.count("blob `971187e6`") >= 3

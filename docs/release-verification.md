@@ -369,6 +369,33 @@ evaluation report, the transfer report) were not inspected.
 
 Status stays **Candidate**.
 
+### 2026-10-18 pre-registration amendment 1: float32 recipe and fresh test 2
+
+Owner decision (Kurt, 2026-10-18): keep the record, fix the GPU training precision, and pre-register a second fresh test.
+`docs/qwen3-embedding-preregistration-amendment-2026-10-18.md` was committed alone first (`49d82f7`), before any code
+change of this round.
+
+- **Recipe 1 record unchanged.** The hosted T4 run of `1cc43ed` (blob `971187e6`, 2026-10-17) remains the
+  pre-registered evaluation of record for recipe 1 (bf16 CUDA training): fresh-test MRR 0.7338 -> 0.8455, +0.1118, 95 %
+  CI 0.0911 to 0.134 (queries), 0.0711 to 0.1569 (intents). `samples.RECORDED_EVALUATIONS` holds it under recipe 1.
+- **Finding.** `pipeline.py` loaded bfloat16 on CUDA and AdamW stepped the bfloat16 parameters with no float32 master
+  copy; T4 validation MRR C0 0.788 vs CPU float32 0.828 (C1 0.720 vs 0.796, C2 0.730 vs 0.827).
+- **Recipe 2.** float32 on every device (`MODEL_DTYPE`, `model_dtype`); `adapt` refuses non-float32 trainable
+  parameters and checks that the AdamW moments are float32; adapter manifests record their dtype (float32: 125,849,896 B
+  for 2 layers). Chosen over bf16 or fp16 autocast because a T4 has no bf16 tensor cores and fp16 risks overflow in a
+  bf16-trained decoder; memory well under 16 GB. **T4 estimate (not measured):** grid 2.5-5 min, whole session 7-12 min.
+- **Fresh test 2.** 770 (10 per intent) from the 1,770 test.csv messages no run has scored (excluding the exposed 385,
+  W16's 154, the 22 train repeats and fresh test 1's 770; 19-24 per intent), `Random(20261018)`, manifest
+  `cd0171285dfd6ccc72b88d82b43ad856af6869a84a49cc50ac06046119f37a63`; near-duplicates reported: 12 in the draw, 29 in the
+  pool. Only fresh test 2 is scored as the pre-registered evaluation; fresh test 1 is shown every run as
+  "fresh test 1 (scored once, 2026-10-17, bf16 recipe; now an exposed test)".
+- **Recipe-2 record:** none yet (`RECORDED_EVALUATIONS[recipe 2] = None`); the first hosted pre-registered T4 run of
+  recipe 2 will be THE evaluation of record for it.
+- **CPU check (both fresh tests masked; a guard aborted on any fresh-test query).** CPU was already float32, so the grid
+  was not re-run. Smoke on real weights: parameters float32; a 64-pair, 1-epoch C0 adaptation passed both float32
+  checks (validation MRR 0.6991 -> 0.7152; the frozen value equals the 2026-10-17 CPU record); manifest dtype float32,
+  125,849,896 B; reload float32 with identical validation MRR (0.715178 both). Not a hosted run.
+
 ## Qwen3 semantic search and reranking notebook — 2026-09-26 follow-up
 
 This record concerns `DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb` on PR #8, separately from the primary E2E embedding tutorial above. Assessment used fleet NOTEBOOK_SPEC 2.2 (blob `046d866eac7cc67b1539a4ba370ebc965341c87b`) and this repository's search/reranking specification. The compatible 2.1 declaration remains; the 2.2 guided recommendations do not change mandatory profile semantics.

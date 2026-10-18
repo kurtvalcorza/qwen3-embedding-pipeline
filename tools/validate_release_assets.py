@@ -53,7 +53,10 @@ CODE_MARKERS = (
     "raise DatasetRefused(f'BYOD refused: ",
     "globals().pop(_stale, None)",
     # R72-M1/s2: the pinned fresh test and the exposed development test
-    "fresh = build_fresh_test(corpus, splits)",
+    "fresh = build_fresh_test_2(corpus, splits)",
+    "fresh1_records = fresh['fresh_test_1']",
+    "f1_frozen = pipe.evaluate_base(fresh1_records, instruction=INSTRUCTION, candidates=document_set)",
+    "'precision': adapt_result['precision'],",
     "check_split_disjoint({'train': train_records, 'validation': val_records, 'fresh_test': fresh_records})",
     "report_records = exposed_records if report_on_exposed else val_records",
     "dataset_manifests = {name: validate_dataset(part) if name == 'train' else validate_dataset(part, min_records=1) for name, part in splits.items()}",

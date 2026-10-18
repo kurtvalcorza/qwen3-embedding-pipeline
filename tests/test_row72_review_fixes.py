@@ -89,7 +89,7 @@ def section_8_namespace(*, adapted_mrr: float, use_byod: bool, preregistered: bo
         "adapt_result": {"history": [], "best_epoch": 0}, "adapt_seconds": 0.0, "near_duplicates": {"near_duplicates": {"test": 9}},
         "USE_BYOD": use_byod, "preregistered": preregistered, "settings_differing": [] if preregistered else ["epochs"], "run_settings": {},
         "grid_selection": selection, "fresh": {"manifest": {"manifest_sha256": "f" * 64}} if not use_byod else None, "fresh_records": FRESH if not use_byod else [],
-        "test_look": samples.test_look, "paired_rank_comparison": metrics.paired_rank_comparison, "paired_cluster_comparison": metrics.paired_cluster_comparison,
+        "test_look": samples.test_look, "paired_rank_comparison": metrics.paired_rank_comparison, "paired_cluster_comparison": metrics.paired_cluster_comparison, "fresh1_records": [], "FRESH_TEST_1_LABEL": samples.FRESH_TEST_1_LABEL, "MODEL_DTYPE": "float32",
         "brief": lambda m: {k: m[k] for k in ("recall@1", "mrr")},
     }
 
@@ -149,7 +149,11 @@ def test_identical_rerun_is_a_reproduction():
     assert samples.test_look(True, 0, None) == "pre-registered evaluation (this runtime)"
     assert samples.test_look(True, 1, None) == "reproduction"
     assert samples.test_look(True, 0, {"run": "hosted T4"}) == "reproduction"
-    assert samples.RECORDED_EVALUATION is None  # until the first hosted run is recorded
+    # Recipe 1 has its record (hosted T4, 2026-10-17); recipe 2 is None until its first hosted run is recorded.
+    assert samples.RECORDED_EVALUATION is None and samples.RECORDED_EVALUATIONS[samples.RECIPE] is None
+    record = samples.RECORDED_EVALUATIONS[samples.RECIPE_1]
+    assert record["blob"].startswith("971187e6") and record["fresh_test_sha256"] == samples.FRESH_TEST_MANIFEST_SHA256
+    assert samples.test_look(True, 0) == "pre-registered evaluation (this runtime)"
 
 
 def test_exploratory_section_8_never_reads_the_fresh_test(notebook, tmp_path, monkeypatch):
@@ -299,7 +303,11 @@ def test_workshop_draw_replica_matches_the_workshop_cell():
 def test_fresh_test_pin_is_recorded_in_the_preregistration():
     text = (ROOT / "docs" / "qwen3-embedding-preregistration.md").read_text(encoding="utf-8")
     assert samples.FRESH_TEST_MANIFEST_SHA256 in text and samples.TRANSFER_MANIFEST_SHA256 in text
-    assert samples.PREREGISTERED_SETTINGS["fresh_test_sha256"] == samples.FRESH_TEST_MANIFEST_SHA256
+    # Amendment 1: the pre-registered settings now name fresh test 2 and the float32 recipe.
+    amendment = (ROOT / "docs" / "qwen3-embedding-preregistration-amendment-2026-10-18.md").read_text(encoding="utf-8")
+    assert samples.FRESH_TEST_2_MANIFEST_SHA256 in amendment
+    assert samples.PREREGISTERED_SETTINGS["fresh_test_sha256"] == samples.FRESH_TEST_2_MANIFEST_SHA256
+    assert samples.PREREGISTERED_SETTINGS["precision"] == "float32"
 
 
 # ---- R72-M2: transfer check -------------------------------------------------------------------------------------
@@ -501,3 +509,76 @@ def test_cluster_bootstrap_resamples_whole_intents():
     assert result["ci"][0] <= result["delta_mrr"] <= result["ci"][1]
     with pytest.raises(ValueError):
         metrics.paired_cluster_comparison([1], [1], [])
+
+
+# ---- round 3 (amendment 1, 2026-10-18) ----------------------------------------------------------------------------
+
+
+def test_model_dtype_is_float32_on_cuda_and_cpu():
+    torch = pytest.importorskip("torch")
+    from qwen3_embedding_pipeline import pipeline as pl
+
+    assert pl.model_dtype("cuda:0") is torch.float32 and pl.model_dtype("cpu") is torch.float32
+    source = (ROOT / "src" / "qwen3_embedding_pipeline" / "pipeline.py").read_text(encoding="utf-8")
+    assert "torch.bfloat16" not in source and "dtype = model_dtype(resolved_device)" in source
+
+
+def test_trainable_parameters_and_optimiser_state_are_float32():
+    """The CUDA path trains exactly like CPU: float32 trainable tensors and float32 AdamW moments."""
+    torch = pytest.importorskip("torch")
+    from qwen3_embedding_pipeline import pipeline as pl
+
+    layer = torch.nn.Linear(4, 4)
+    optimiser = torch.optim.AdamW(layer.parameters(), lr=1e-3)
+    layer(torch.ones(2, 4)).sum().backward()
+    optimiser.step()
+    pl.check_float32_training(list(layer.parameters()), optimiser)
+    assert all(v.dtype == torch.float32 for s in optimiser.state.values() for k, v in s.items() if k != "step")
+    half = torch.nn.Linear(4, 4).to(torch.bfloat16)
+    with pytest.raises(RuntimeError, match="must be float32"):
+        pl.check_float32_training(list(half.parameters()))
+    source = (ROOT / "src" / "qwen3_embedding_pipeline" / "pipeline.py").read_text(encoding="utf-8")
+    adapt = source[source.index("    def adapt("): source.index("    def restore_base(")]
+    assert adapt.index("check_float32_training(params)") < adapt.index("torch.optim.AdamW(")
+    assert "check_float32_training(params, optimiser)" in adapt
+
+
+def test_adapter_save_reload_keeps_float32(tmp_path):
+    """save_artifact records the tensor dtype; load_artifact casts to the model's dtype, which is float32."""
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("safetensors")
+    from safetensors.torch import load_file, save_file
+
+    from qwen3_embedding_pipeline import pipeline as pl
+
+    tensors = {"layers.27.w": torch.randn(3, 3, dtype=pl.model_dtype("cuda:0"))}
+    save_file(tensors, str(tmp_path / "a.safetensors"))
+    back = load_file(str(tmp_path / "a.safetensors"))
+    assert back["layers.27.w"].dtype == torch.float32
+    source = (ROOT / "src" / "qwen3_embedding_pipeline" / "pipeline.py").read_text(encoding="utf-8")
+    assert '"dtype": sorted({str(v.dtype).replace("torch.", "") for v in tensors.values()})' in source
+    assert "merged.update({k: v.to(state[k].dtype) for k, v in tensors.items()})" in source
+
+
+def test_fresh_test_2_excludes_fresh_test_1_and_every_exposed_message():
+    corpus = _synthetic_corpus(test_per=40)
+    built = samples.build_fresh_test_2(corpus, verify=False)
+    keys2 = {samples.query_key(r["query"]) for r in built["records"]}
+    keys1 = {samples.query_key(r["query"]) for r in built["fresh_test_1"]}
+    exposed = {samples.query_key(r["query"]) for r in samples.build_sample_dataset(corpus)["test"]}
+    workshop = {samples.query_key(r["query"]) for r in samples.workshop_w16_queries(corpus)}
+    assert len(built["records"]) == 770 and not keys2 & (keys1 | exposed | workshop)
+    with pytest.raises(ValueError, match="differs from the pinned"):
+        samples.build_fresh_test_2(corpus)
+
+
+def test_only_fresh_test_2_is_scored_as_the_evaluation_and_fresh_test_1_is_shown_as_exposed(notebook, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "outputs").mkdir()
+    namespace = section_8_namespace(adapted_mrr=0.85, use_byod=False, preregistered=False)
+    fresh1 = [{"id": f"fresh-{i:04d}", "query": f"old {i}", "positive": "d", "intent": "x"} for i in range(3)]
+    namespace["fresh1_records"] = fresh1
+    exec(compile(_cell(notebook, "delta_mrr = "), "<section 8>", "exec"), namespace)
+    assert namespace["fresh_result"] is None and namespace["fresh1_result"]["label"] == samples.FRESH_TEST_1_LABEL
+    assert not any(ids and ids[0].startswith("fresh2-") for _m, ids in namespace["pipe"].scored)
+    assert "fresh = build_fresh_test_2(corpus, splits)" in _cell(notebook, "if USE_BYOD:")

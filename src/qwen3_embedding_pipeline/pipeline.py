@@ -38,6 +38,10 @@ MAX_TRAIN_TOKENS = (
     64  # training-only truncation of queries and documents (inference truncates at MAX_TEXT_TOKENS)
 )
 DEFAULT_TEMPERATURE = 0.05
+# Recipe 2 (pre-registration amendment 1, 2026-10-18): the model is loaded, trained and evaluated in float32
+# on every device. Recipe 1 loaded bfloat16 on CUDA and stepped AdamW on bfloat16 weights, losing small
+# updates to rounding.
+MODEL_DTYPE = "float32"
 MAX_EVAL_RECORDS = 2_000
 MAX_DOCUMENTS = 1_000
 MIN_SCORED_RECORDS = 50  # below this a scored dataset is labelled a small sample
@@ -243,6 +247,35 @@ def evaluation_report(
     }
 
 
+def model_dtype(device: str) -> Any:
+    """The torch dtype the model is loaded and trained in: float32 on every device (recipe 2)."""
+    import torch
+
+    del device  # the same on CPU and CUDA since amendment 1
+    return getattr(torch, MODEL_DTYPE)
+
+
+def check_float32_training(params: Sequence[Any], optimiser: Any = None) -> None:
+    """Refuse to train or report unless every trainable parameter and optimiser state tensor is float32."""
+    import torch
+
+    bad = [str(p.dtype) for p in params if p.dtype != torch.float32]
+    if bad:
+        raise RuntimeError(f"trainable parameters must be float32 (recipe 2); found {sorted(set(bad))}")
+    if optimiser is not None:
+        for state in optimiser.state.values():
+            for key, value in state.items():
+                if (
+                    torch.is_tensor(value)
+                    and value.is_floating_point()
+                    and key != "step"
+                    and value.dtype != torch.float32
+                ):
+                    raise RuntimeError(
+                        f"optimiser state {key!r} must be float32 (recipe 2); found {value.dtype}"
+                    )
+
+
 def _remember_base(base: dict[str, Any], model: Any, names: Sequence[str]) -> None:
     """Keep a copy of each named tensor's pinned-base value the first time it is about to change."""
     state = model.state_dict()
@@ -295,7 +328,7 @@ class Qwen3EmbeddingPipeline:
         from transformers import AutoModel, AutoTokenizer
 
         resolved_device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
-        dtype = torch.bfloat16 if resolved_device.startswith("cuda") else torch.float32
+        dtype = model_dtype(resolved_device)
         tokenizer = AutoTokenizer.from_pretrained(
             source, padding_side="left", trust_remote_code=False, **kwargs
         )
@@ -510,6 +543,7 @@ class Qwen3EmbeddingPipeline:
             param.requires_grad_(name in wanted)
         params = [p for p in model.parameters() if p.requires_grad]
         n_trainable = sum(p.numel() for p in params)
+        check_float32_training(params)
         optimiser = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
         device = torch.device(self.device)
 
@@ -585,6 +619,7 @@ class Qwen3EmbeddingPipeline:
                 param.requires_grad_(False)
             self.adapter = None
             raise
+        check_float32_training(params, optimiser)
         merged = dict(model.state_dict())
         merged.update(best_state)
         model.load_state_dict(merged, strict=True)
@@ -609,6 +644,7 @@ class Qwen3EmbeddingPipeline:
             "n_train_documents": len(documents(train_checked)),
             "n_val": len(val_checked),
             "seed": seed,
+            "precision": MODEL_DTYPE,
             "started_from": "pinned base"
             + (f" (restored {len(restored)} tensors an earlier run changed)" if restored else ""),
             "history": history,
@@ -656,6 +692,7 @@ class Qwen3EmbeddingPipeline:
             "adapter": {k: v for k, v in self.adapter.items() if k not in ("history", "trainable_names")},
             "history": self.adapter["history"],
             "tensors": sorted(tensors),
+            "dtype": sorted({str(v.dtype).replace("torch.", "") for v in tensors.values()}),
             "files": [
                 {
                     "path": ARTIFACT_WEIGHTS_NAME,
