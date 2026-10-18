@@ -532,7 +532,9 @@ def workshop_w16_queries(corpus: Mapping[str, Sequence[Mapping[str, Any]]]) -> l
 
 FRESH_TEST_2_SEED = 20_261_018
 FRESH_TEST_2_MANIFEST_SHA256 = "cd0171285dfd6ccc72b88d82b43ad856af6869a84a49cc50ac06046119f37a63"
-FRESH_TEST_1_LABEL = "fresh test 1 (scored once, 2026-10-17, bf16 recipe; now an exposed test)"
+FRESH_TEST_1_LABEL = (
+    "fresh test 1 (scored under the recipe-1 pre-registered settings on 2026-10-17; now an exposed test)"
+)
 
 
 def fresh_test_digest(records: Sequence[Mapping[str, Any]]) -> str:
@@ -656,8 +658,9 @@ GRID_CONFIGS: dict[str, dict[str, Any]] = {
 }
 GRID_MARGIN = 0.02
 # The evaluation of record per recipe (docs/release-verification.md). Recipe 1 (bf16 CUDA training) was
-# scored on fresh test 1 by the hosted T4 run of 2026-10-17; recipe 2 (float32, fresh test 2) is None until
-# its first hosted pre-registered run is recorded. Later identical runs of a recipe are reproductions.
+# scored on fresh test 1 by the hosted T4 run of 2026-10-17; recipe 2 (float32, fresh test 2) by the hosted
+# T4 run of 2026-10-18 (docs/execution-evidence/2026-10-18-9ca75dc/). Later identical runs of a recipe are
+# reproductions.
 RECIPE_1 = "recipe 1 (bf16 CUDA training; fresh test 1)"
 RECIPE = "recipe 2 (float32 on every device; fresh test 2)"
 RECORDED_EVALUATIONS: dict[str, dict[str, Any] | None] = {
@@ -672,7 +675,17 @@ RECORDED_EVALUATIONS: dict[str, dict[str, Any] | None] = {
         "ci95_queries": [0.0911, 0.134],
         "ci95_intents": [0.0711, 0.1569],
     },
-    RECIPE: None,
+    RECIPE: {
+        "executor": "Colab CLI 0.7.4, fresh Colab Tesla T4, cuda:0 float32",
+        "date": "2026-10-18",
+        "commit": "9ca75dc0b9fea12fb6a5e158988f5bae3765903f",
+        "blob": "de48070a3621ed61529948a1b1f3a0e671bf9ed4",
+        "fresh_test_sha256": FRESH_TEST_2_MANIFEST_SHA256,
+        "fresh_mrr": {"frozen": 0.7274, "adapted": 0.8595},
+        "paired_delta_mrr": 0.1321,
+        "ci95_queries": [0.111, 0.1547],
+        "ci95_intents": [0.0886, 0.1748],
+    },
 }
 RECORDED_EVALUATION: dict[str, Any] | None = RECORDED_EVALUATIONS[RECIPE]
 
@@ -864,7 +877,8 @@ def build_fresh_test_2(
     scored.
 
     Excluded: the exposed development test (385), the workshop W16's 154, every exact `query_key` repeat of a
-    train.csv message, and fresh test 1 (770, scored once on 2026-10-17). `verify` refuses any draw whose
+    train.csv message, and fresh test 1 (770, scored under the recipe-1
+    pre-registered settings on 2026-10-17). `verify` refuses any draw whose
     manifest SHA-256 is not FRESH_TEST_2_MANIFEST_SHA256."""
     exposed_splits = build_sample_dataset(corpus, seed=SAMPLE_SEED)
     fresh_1 = build_fresh_test(corpus, exposed_splits, verify=verify)["records"]

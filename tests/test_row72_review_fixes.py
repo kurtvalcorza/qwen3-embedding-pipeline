@@ -149,11 +149,14 @@ def test_identical_rerun_is_a_reproduction():
     assert samples.test_look(True, 0, None) == "pre-registered evaluation (this runtime)"
     assert samples.test_look(True, 1, None) == "reproduction"
     assert samples.test_look(True, 0, {"run": "hosted T4"}) == "reproduction"
-    # Recipe 1 has its record (hosted T4, 2026-10-17); recipe 2 is None until its first hosted run is recorded.
-    assert samples.RECORDED_EVALUATION is None and samples.RECORDED_EVALUATIONS[samples.RECIPE] is None
+    # Recipe 1 has its record (hosted T4, 2026-10-17); recipe 2 has its record (hosted T4, 2026-10-18).
+    assert samples.RECORDED_EVALUATION is samples.RECORDED_EVALUATIONS[samples.RECIPE] is not None
+    assert samples.RECORDED_EVALUATION["blob"].startswith("de48070a") and samples.RECORDED_EVALUATION["fresh_test_sha256"] == samples.FRESH_TEST_2_MANIFEST_SHA256
     record = samples.RECORDED_EVALUATIONS[samples.RECIPE_1]
     assert record["blob"].startswith("971187e6") and record["fresh_test_sha256"] == samples.FRESH_TEST_MANIFEST_SHA256
-    assert samples.test_look(True, 0) == "pre-registered evaluation (this runtime)"
+    # with the recipe-2 record set, the first identical scoring in any runtime is a reproduction (SCORE_ONCE item 3)
+    assert samples.test_look(True, 0) == "reproduction"
+    assert samples.test_look(False, 0) == "not scored (exploratory)"
 
 
 def test_exploratory_section_8_never_reads_the_fresh_test(notebook, tmp_path, monkeypatch):
@@ -174,6 +177,7 @@ def test_preregistered_section_8_scores_the_fresh_test_then_labels_a_rerun_a_rep
     (tmp_path / "outputs").mkdir()
     source = _cell(notebook, "delta_mrr = ")
     namespace = section_8_namespace(adapted_mrr=0.85, use_byod=False, preregistered=True)
+    namespace["test_look"] = lambda pre, looks: samples.test_look(pre, looks, None)  # before the recipe-2 record existed
     exec(compile(source, "<section 8>", "exec"), namespace)
     assert ("frozen", tuple(r["id"] for r in FRESH)) in namespace["pipe"].scored
     assert ("adapted", tuple(r["id"] for r in FRESH)) in namespace["pipe"].scored
@@ -582,3 +586,63 @@ def test_only_fresh_test_2_is_scored_as_the_evaluation_and_fresh_test_1_is_shown
     assert namespace["fresh_result"] is None and namespace["fresh1_result"]["label"] == samples.FRESH_TEST_1_LABEL
     assert not any(ids and ids[0].startswith("fresh2-") for _m, ids in namespace["pipe"].scored)
     assert "fresh = build_fresh_test_2(corpus, splits)" in _cell(notebook, "if USE_BYOD:")
+
+
+# --- Requote 2026-10-18: the recipe-2 evaluation of record is the hosted T4 float32 run of 9ca75dc -----------------
+
+
+EVIDENCE = ROOT / "docs" / "execution-evidence" / "2026-10-18-9ca75dc" / "qwen3_embedding_colab_9ca75dc_colab-cli-t4_output.ipynb"
+
+
+def _evidence_lines() -> list[str]:
+    nb = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    return ["".join(o.get("text", "")) for c in nb["cells"] for o in c.get("outputs", [])]
+
+
+def _evidence_block(prefix: str) -> dict:
+    import ast
+
+    for text in _evidence_lines():
+        for line in text.splitlines():
+            if line.startswith(prefix):
+                return ast.literal_eval(line)
+    raise AssertionError(f"no {prefix!r} line in the evidence notebook")
+
+
+def test_requote_recipe_2_record_equals_the_evidence_notebook():
+    rec = samples.RECORDED_EVALUATIONS[samples.RECIPE]
+    fresh = _evidence_block("{'fresh_test': {'test_look'")["fresh_test"]
+    paired = _evidence_block("{'fresh_test_paired_mrr'")
+    assert rec["commit"].startswith("9ca75dc") and rec["blob"] == "de48070a3621ed61529948a1b1f3a0e671bf9ed4" and fresh["dtype"] == "float32"
+    assert fresh["test_look"] == "pre-registered evaluation (this runtime)" and fresh["manifest_sha256"] == rec["fresh_test_sha256"] == samples.FRESH_TEST_2_MANIFEST_SHA256
+    assert rec["fresh_mrr"] == {"frozen": fresh["frozen"]["mrr"], "adapted": fresh["adapted"]["mrr"]}
+    assert rec["paired_delta_mrr"] == paired["fresh_test_paired_mrr"]["delta"] and rec["ci95_queries"] == paired["fresh_test_paired_mrr"]["ci95"]
+    assert rec["ci95_intents"] == paired["ci95_intent_level"]
+    # the recipe-1 record is kept intact
+    assert samples.RECORDED_EVALUATIONS[samples.RECIPE_1]["blob"].startswith("971187e6")
+
+
+def test_requote_with_the_record_set_an_identical_run_is_a_reproduction(notebook, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "outputs").mkdir()
+    source = _cell(notebook, "delta_mrr = ")
+    namespace = section_8_namespace(adapted_mrr=0.85, use_byod=False, preregistered=True)
+    exec(compile(source, "<section 8>", "exec"), namespace)
+    assert ("adapted", tuple(r["id"] for r in FRESH)) in namespace["pipe"].scored
+    assert namespace["look"] == "reproduction" and namespace["run_tag"].startswith("_reproduction_")
+    assert not (tmp_path / "outputs" / "qwen3_embedding_evaluation_report.json").exists()
+    report = json.loads((tmp_path / "outputs" / f"qwen3_embedding_evaluation_report{namespace['run_tag']}.json").read_text(encoding="utf-8"))
+    assert report["test_look"] == "reproduction"
+    # a changed setting is still exploratory with the record set
+    namespace = section_8_namespace(adapted_mrr=0.85, use_byod=False, preregistered=False)
+    exec(compile(source, "<section 8 changed>", "exec"), namespace)
+    assert namespace["look"] == "not scored (exploratory)" and namespace["fresh_result"] is None
+
+
+def test_requote_notebook_text_quotes_the_recipe_2_record(notebook):
+    text = NOTEBOOK.read_text(encoding="utf-8")
+    for stale in ("scored once", "low-order digits", "estimated at 7", "2.5–5 minutes", "no recorded grid yet", "no recorded value yet", "not re-run for this revision", "once the hosted run exists", "ten points or so", "+13.5"):
+        assert stale not in text, stale
+    for quote in ("scored under the recipe-1 pre-registered settings on 2026-10-17; now an exposed test", "MRR 0.727 → 0.860 (+0.132; 95 % CI 0.111 to 0.155 over queries, 0.089 to 0.175 over intents)", "5.8 minutes", "105 s", "35.1 s", "8.3 s", "+14.3", "+16.9", "0.828415", "0.8284 / 0.7962 / 0.8270", "+0.0595", "−0.0209"):
+        assert quote in text, quote
+    assert samples.FRESH_TEST_1_LABEL == "fresh test 1 (scored under the recipe-1 pre-registered settings on 2026-10-17; now an exposed test)"

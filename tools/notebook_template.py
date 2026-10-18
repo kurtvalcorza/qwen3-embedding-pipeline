@@ -52,7 +52,7 @@ TEMPLATE = {
         "exports the adapter as safetensors with a manifest, and reloads that artifact into a fresh pipeline to verify "
         "parity, then runs an optional transfer check on CLINC150 (not an MTEB task). The default path needs no repository clone, no DIMER worker or service, no credential, no upload dialog "
         "and no configuration edit (NOTEBOOK_SPEC 2.2 §5). On CPU the whole path takes 20–40 minutes of model time "
-        "after the downloads (the grid trains three configurations); a T4 took 6.4 minutes for the whole session under recipe 1 and is estimated at 7–12 under the float32 recipe; a CUDA runtime is used automatically when present (float32 on every device since pre-registration amendment 1)."
+        "after the downloads (the grid trains three configurations); a T4 took 5.8 minutes (347 s) for the whole session under the float32 recipe on 18 October 2026 (6.4 minutes under recipe 1); a CUDA runtime is used automatically when present (float32 on every device since pre-registration amendment 1)."
     ),
     "byod": (
         "After the tutorial workflow completes, set `USE_BYOD = True` in Section 4 and re-run from that cell to supply your own "
@@ -70,7 +70,7 @@ TEMPLATE = {
             '**Who this notebook is for.** The intended audience is a learner who knows basic Python, has used Colab or Jupyter, and wants to see how a '
             'text-embedding model turns messages into vectors, how retrieval quality is measured against honest floors, and what a bounded contrastive fine-tuning '
             'changes on a real labelled corpus. No prior experience with Qwen3, embeddings or contrastive learning is assumed; terms are explained where they first '
-            'matter and again in the **Glossary** at the end. CPU works but is slow (20–40 minutes of model time, most of it the validation grid); a T4 GPU runtime is estimated at 7–12 minutes.\n\n**Input → Model → Output.**\n\n| '
+            'matter and again in the **Glossary** at the end. CPU works but is slow (20–40 minutes of model time, most of it the validation grid); a T4 GPU runtime took 5.8 minutes for the whole session on the recorded run.\n\n**Input → Model → Output.**\n\n| '
             '| Embedding and retrieval | Bounded contrastive fine-tuning |\n|---|---|---|\n| Input | texts: queries (with a task instruction) or documents, up to '
             '8,192 tokens | query–positive pairs: 616 / 154 Banking77 messages for training and validation, plus a 385-query exposed development test and a 770-query fresh test, each paired with its intent phrase, query-disjoint |\n| Model | the '
             'Qwen3-Embedding-0.6B decoder, last-token pooled and L2-normalised | the same model; only the last two decoder layers train (31.5 M of 595.8 M '
@@ -81,9 +81,7 @@ TEMPLATE = {
             '**infrastructure** — the isolated environment, the carried package and the model snapshot — and their cells are collapsed; you may run them without '
             'studying them. The learning path starts in Section 4. Form fields (`# @param`) are the only values meant to be edited, and the defaults are the '
             'pre-registered settings (`docs/qwen3-embedding-preregistration.md`): changing one makes the run exploratory, and the notebook says so. Before each principal result the notebook asks you to **Predict**; after it come **What to notice** and a collapsible **Check your '
-            'reasoning** with a worked answer. Numbers in those answers are labelled with their source: the Colab CLI Tesla T4 runs of 9 October 2026 (blob `26a62b80`) and 17 October 2026 (blob `971187e6`, the evaluation of record for '
-            'fresh test 1), which agree exactly on the 385 queries now called the exposed development test; both are recorded in `docs/release-verification.md` and were not re-run for '
-            'this revision. Both used recipe 1, which trained in bfloat16 on CUDA. This revision trains in float32 on every device (pre-registration amendment 1), so adapted numbers on a GPU will differ, typically upward: on CPU float32 the same configuration reached validation MRR 0.828 against 0.788 on the T4. Every adaptation starts from the pinned base, so re-running Section 7 with other '
+            'reasoning** with a worked answer. Numbers in those answers are labelled with their source: unless an answer says otherwise they come from the hosted Colab CLI T4 run of 18 October 2026 (blob `de48070a`, commit `9ca75dc`; recipe 2, float32; the recipe-2 evaluation of record), recorded in `docs/release-verification.md` (`docs/execution-evidence/2026-10-18-9ca75dc/`). Where an answer quotes recipe 1 (the Colab CLI T4 runs of 9 and 17 October 2026, blobs `26a62b80` and `971187e6`, bfloat16 training on CUDA) it says so. This revision trains in float32 on every device (pre-registration amendment 1), and on the recorded T4 run every printed validation, exposed-test and transfer number equalled the CPU float32 build record (validation MRR 0.8284 for C0 on both, against 0.788 on the recipe-1 T4). Every adaptation starts from the pinned base, so re-running Section 7 with other '
             'settings is a fresh experiment; Sections 5 and 6 put the pinned base back before they measure, so their numbers are always the frozen '
             'model\'s, and after re-running them you re-run Section 7 before Sections 8 and 9 (those two cells refuse to score the base as "adapted"). **Troubleshooting**, a **Glossary** and a **Conclusion** template are at the end. Writing your predictions down is optional.\n\n**Roadmap:** '
             '1–3 infrastructure → 4 the Banking77 corpus, validation and the split *(evaluation practice)* → 5 the embedding contract *(core concept: vectors, not '
@@ -146,7 +144,7 @@ TEMPLATE = {
         "(Section 7); what makes the reported number independent is the pinned 770-query **fresh test**, which played no part in any choice, drawn from "
         "messages this repository had never scored is read **only under the exact pre-registered settings**; see `docs/release-verification.md` "
         "for the recorded evaluation and its reproductions. Amendment 1 (2026-10-18, `docs/qwen3-embedding-preregistration-amendment-2026-10-18.md`) moved "
-        "training to float32 on every device and pre-registered **fresh test 2**; fresh test 1, scored once under the bf16 recipe, is now an exposed test. The carried `metrics.py` ranks the "
+        "training to float32 on every device and pre-registered **fresh test 2**; fresh test 1, scored under the recipe-1 pre-registered settings on 2026-10-17, is now an exposed test. The carried `metrics.py` ranks the "
         "documents for every held-out query by cosine and reads the rank of its positive: **recall@1**, **recall@5**, "
         "**recall@10** and **MRR**; a **random floor** (1 / 77 recall@1) and a **lexical baseline** (Jaccard token "
         "overlap between message and phrase) frame the frozen number. The fine-tuning question is whether a bounded "
@@ -171,7 +169,7 @@ TEMPLATE = {
         "intent split stands in for your retrieval task. The repository exposes none of these."
     ),
     "prerequisites": [
-        "- **Runtime:** a fresh supported runtime (Google Colab or Jupyter, Python 3.12). The default path runs on CPU and uses CUDA automatically when available. **Precision:** since pre-registration amendment 1 (2026-10-18) the pipeline loads, trains and evaluates in float32 on CPU and CUDA alike (recipe 2); CPU and GPU kernels still differ in low-order digits. Recipe 1, recorded on 17 October 2026, trained in bfloat16 on CUDA, and its adapted numbers were 0.03–0.10 MRR below the CPU float32 ones. CPU is adequate for this sample: the build record measured about 5 s to load and digest-verify the 1.19 GB snapshot, about 30 s to embed the 385 test queries and 77 documents, and, in the 2026-10-17 CPU build record, about 7–9 minutes per grid configuration (two epochs over 616 pairs, each with a validation pass; the default path trains four times: three grid configurations and the selected one). Building the isolated environment (the pinned `torch==2.14.0` among its packages; reused on a re-run) and the 1.19 GB checkpoint are the large downloads of the run.",
+        "- **Runtime:** a fresh supported runtime (Google Colab or Jupyter, Python 3.12). The default path runs on CPU and uses CUDA automatically when available. **Precision:** since pre-registration amendment 1 (2026-10-18) the pipeline loads, trains and evaluates in float32 on CPU and CUDA alike (recipe 2); on the recorded T4 run of 18 October 2026 every printed validation, exposed-test and transfer number equalled the CPU float32 build record. Recipe 1, recorded on 17 October 2026, trained in bfloat16 on CUDA, and its adapted numbers were 0.03–0.10 MRR below the CPU float32 ones. CPU is adequate for this sample: the build record measured about 5 s to load and digest-verify the 1.19 GB snapshot, about 30 s to embed the 385 test queries and 77 documents, and, in the 2026-10-17 CPU build record, about 7–9 minutes per grid configuration (two epochs over 616 pairs, each with a validation pass; the default path trains four times: three grid configurations and the selected one). Building the isolated environment (the pinned `torch==2.14.0` among its packages; reused on a re-run) and the 1.19 GB checkpoint are the large downloads of the run.",
         "- **Knowledge:** basic Python and NumPy; what a dense vector, a unit norm and cosine similarity are; what recall@k and mean reciprocal rank measure and why they need a labelled query–document set; what a contrastive (InfoNCE) loss with in-batch negatives does.",
         "- **Data contract:** records are `{id, query, positive}` — a query of 1..100,000 characters (text beyond 8,192 tokens is truncated and flagged at inference; queries and documents are truncated to 64 tokens **during training only**), a positive document of 1..1,000 characters, an optional `negative` document (added to the document set), ids matching `[A-Za-z0-9_.:-]{1,64}` and unique; a BYOD dataset needs 12..20,000 distinct queries (20 % go to test and 15 % to validation, and at least 8 must stay for training) and at least 2 distinct positives; queries are de-duplicated ignoring case, punctuation and spacing before splitting so the same message never sits in two splits, and near-paraphrases across splits (token Jaccard ≥ 0.8) are counted and reported, not removed. BYOD accepts CSV, JSON or JSONL in that shape.",
         "- **Validation is structural, not semantic:** nothing checks that a positive is relevant to its query or that the instruction describes the task — a mislabelled pair set is fine-tuned on without complaint.",
@@ -191,7 +189,7 @@ TEMPLATE = {
                 "intents. Those 385 test pairs were used to compare configurations in 2026-09, so they are the **exposed development "
                 "test**. `build_fresh_test_2` then draws the pinned **fresh test 2** (pre-registration amendment 1): 10 per intent from the `test` messages no run had "
                 "never scored (not the 385, not the 154 of the semantic-search workshop, and no exact repeat of a `train` message), refused "
-                "unless its manifest SHA-256 matches the pin; fresh test 1, scored once on 2026-10-17 under the bf16 recipe, is excluded too and is now an exposed test. It is built here and not scored until Section 8, and only under the pre-registered settings. `validate_dataset` then checks every record against the contract, `documents` lists the 77 "
+                "unless its manifest SHA-256 matches the pin; fresh test 1, scored under the recipe-1 pre-registered settings on 2026-10-17, is excluded too; it is now an exposed test. It is built here and not scored until Section 8, and only under the pre-registered settings. `validate_dataset` then checks every record against the contract, `documents` lists the 77 "
                 "retrieval candidates, `check_split_disjoint` asserts no message appears in two splits (ignoring case, punctuation "
                 "and spacing), `near_duplicate_pairs` counts validation and test messages that are near-paraphrases of a message in "
                 "another split (token Jaccard ≥ 0.8) — reported, not refused — and the training "
@@ -434,14 +432,14 @@ TEMPLATE = {
         {
             "md": (
                 '**What to notice:** the three systems on recall@1/5/10 and MRR, `median_rank`, and the verdict line.\n\n<details><summary>Check your '
-                'reasoning</summary>Not close. On these 385 queries, in the Colab CLI T4 runs of 9 and 17 October 2026 (blobs `26a62b80` and `971187e6`, identical; recipe 1, bfloat16 training on CUDA; not re-run for this revision), recall@1 was 0.013 for the random floor, 0.3065 for the lexical baseline and 0.6312 for the frozen '
-                'embedder (MRR 0.064 / 0.4159 / 0.741; median rank 5 for lexical, 1 for frozen). Shared words such as *card* get the lexical baseline a third of the '
+                'reasoning</summary>Not close. On these 385 queries, in the hosted Colab CLI T4 run of 18 October 2026 (blob `de48070a`, commit `9ca75dc`; recipe 2, float32; the recipe-2 evaluation of record), recall@1 was 0.013 for the random floor, 0.3065 for the lexical baseline and 0.6338 for the frozen '
+                'embedder (MRR 0.064 / 0.4159 / 0.7422; median rank 5 for lexical, 1 for frozen). Shared words such as *card* get the lexical baseline a third of the '
                 'way; the frozen embedder already understands paraphrase. A lexical baseline near the model would mean the task is mostly keyword matching.</details>'
             ),
         },
         {
             "md": (
-                "## 7. Bounded contrastive fine-tuning, configured on validation\n\n**7a. The pre-registered validation grid.** The learning rate and the number of trainable layers are chosen here, on the 154 validation queries only, by a rule written down before any run (`docs/qwen3-embedding-preregistration.md`). Three configurations are trained with every other setting fixed (2 epochs, batch 16, temperature 0.05, seed 0): **C0** 2 layers at 5e-5 (the previous default), **C1** 2 layers at 2e-5 and **C2** 4 layers at 2e-5. Each is scored by its best-epoch validation MRR. `select_configuration` keeps C0 unless a challenger beats it by at least **0.02** (a predeclared practical tolerance, not a significance test); C2, which doubles the adapter, must also beat the best 2-layer configuration by 0.02; and the frozen model is kept unless the selected configuration beats the frozen validation MRR by 0.02. Every configuration starts from the pinned base, and the grid never reads a test split. It took 139 s on a T4 under recipe 1 (bfloat16; estimated 2.5–5 minutes in float32) and about 25 minutes on a workstation CPU (2026-10-17 build record), and it is on by default (`RUN_GRID`). With `RUN_GRID = False` the training cell uses C0, and the run is exploratory because no selection was made in this session.\n\n**Predict before running:** every configuration gets the same budget, 2 epochs (78 optimiser steps). With a learning rate two and a half times C1's, will C0 get further within that budget, and will either challenger clear a 0.02 margin on validation MRR?"
+                "## 7. Bounded contrastive fine-tuning, configured on validation\n\n**7a. The pre-registered validation grid.** The learning rate and the number of trainable layers are chosen here, on the 154 validation queries only, by a rule written down before any run (`docs/qwen3-embedding-preregistration.md`). Three configurations are trained with every other setting fixed (2 epochs, batch 16, temperature 0.05, seed 0): **C0** 2 layers at 5e-5 (the previous default), **C1** 2 layers at 2e-5 and **C2** 4 layers at 2e-5. Each is scored by its best-epoch validation MRR. `select_configuration` keeps C0 unless a challenger beats it by at least **0.02** (a predeclared practical tolerance, not a significance test); C2, which doubles the adapter, must also beat the best 2-layer configuration by 0.02; and the frozen model is kept unless the selected configuration beats the frozen validation MRR by 0.02. Every configuration starts from the pinned base, and the grid never reads a test split. It took 105 s on the recorded T4 run (recipe 2, float32; 139 s under recipe 1 in bfloat16) and about 25 minutes on a workstation CPU (2026-10-17 build record), and it is on by default (`RUN_GRID`). With `RUN_GRID = False` the training cell uses C0, and the run is exploratory because no selection was made in this session.\n\n**Predict before running:** every configuration gets the same budget, 2 epochs (78 optimiser steps). With a learning rate two and a half times C1's, will C0 get further within that budget, and will either challenger clear a 0.02 margin on validation MRR?"
             ),
             "code": (
                 "RUN_GRID = True  # @param {{type:\"boolean\"}}\n"
@@ -485,7 +483,7 @@ TEMPLATE = {
         },
         {
             "md": (
-                '**What to notice:** each configuration\'s epoch 0 (the same frozen validation MRR every time), its best epoch, the three best-epoch validation MRRs side by side, and which rule decided the `selection`.\n\n<details><summary>Check your reasoning</summary>The grid prints the answer for this run; the recorded hosted grid (T4, 17 October 2026, blob `971187e6`, recipe 1 in bfloat16) gave validation MRR C0 0.7877, C1 0.7197 and C2 0.7299 against frozen 0.6962 and selected C0; the CPU float32 build record gave 0.8284 / 0.7962 / 0.8270 (frozen 0.6991) and also selected C0. Recipe 2 has no recorded grid yet. What matters is the procedure: the choice is made on validation by a rule fixed in advance, and a difference smaller than the margin keeps the smaller, current configuration rather than chasing noise. In both records every configuration\'s best epoch was the last one (epoch 2): '
+                '**What to notice:** each configuration\'s epoch 0 (the same frozen validation MRR every time), its best epoch, the three best-epoch validation MRRs side by side, and which rule decided the `selection`.\n\n<details><summary>Check your reasoning</summary>The grid prints the answer for this run; the recorded hosted grid (T4, 17 October 2026, blob `971187e6`, recipe 1 in bfloat16) gave validation MRR C0 0.7877, C1 0.7197 and C2 0.7299 against frozen 0.6962 and selected C0; the CPU float32 build record gave 0.8284 / 0.7962 / 0.8270 (frozen 0.6991) and also selected C0. The recipe-2 evaluation of record (T4, 18 October 2026, blob `de48070a`, float32) gave 0.8284 / 0.7962 / 0.8270 (frozen 0.6991) and selected C0, equal to the CPU float32 build record. What matters is the procedure: the choice is made on validation by a rule fixed in advance, and a difference smaller than the margin keeps the smaller, current configuration rather than chasing noise. In all three records every configuration\'s best epoch was the last one (epoch 2): '
                 'validation MRR was still rising when the budget ran out, so the grid compares configurations **at this step budget**, not learning rates in general, and a '
                 'lower learning rate is handicapped by construction. The `EPOCHS = 4` experiment (exploratory) shows whether C1 catches up.</details>'
             ),
@@ -502,8 +500,8 @@ TEMPLATE = {
                 "`MAX_TRAIN_TOKENS` (64) **during training only**. Epoch 0 records the frozen model's validation retrieval "
                 "metrics over the validation document set; every epoch is scored the same way, and the epoch with the "
                 "highest validation MRR is kept.\n\n"
-                "Watch validation recall@1 climb by ten points or so over two epochs while recall@5 passes 95 % ("
-                "the previous blob's recorded runs; training the selected configuration takes about 7–9 minutes on a workstation CPU in the 2026-10-17 build record and took 47.7 s on a T4 under recipe 1). `LEARNING_RATE = 0` and `TRAINABLE_LAYERS = 0` "
+                "Watch validation recall@1 climb by about fourteen points over two epochs (0.5844 → 0.7273, +14.3 on the recipe-2 T4 record) while recall@5 passes 95 % ("
+                "0.974 there; training the selected configuration takes about 7–9 minutes on a workstation CPU in the 2026-10-17 build record and took 35.1 s on the recorded T4 run, 47.7 s under recipe 1). `LEARNING_RATE = 0` and `TRAINABLE_LAYERS = 0` "
                 "mean *use the grid's selection*; any other value, like any other change to these fields, makes the run exploratory, and Section 8 "
                 "then reads validation and the exposed development test only. The cell prints `preregistered` and the `settings_differing` list. "
                 "Every call starts from the pinned base (`started_from` in the printed result), so a re-run with other settings is a "
@@ -566,7 +564,7 @@ TEMPLATE = {
         {
             "md": (
                 '**What to notice:** epoch 0 (`note: frozen model`), the training loss, `val_recall@1` and `val_mrr` per epoch, `best_epoch`, and `started_from`.\n\n<details><summary>Check '
-                "your reasoning</summary>Yes. In the previous blob's recorded runs validation recall@1 climbed by about ten points over two epochs while recall@5 passed 95 %; the grid's C2 row shows "
+                "your reasoning</summary>Yes. On the recipe-2 T4 record validation recall@1 climbed 14.3 points over two epochs (0.5844 → 0.7273) while recall@5 passed 95 % (0.974); the grid's C2 row shows "
                 'what two more layers buy on validation at twice the adapter size. In-batch negatives are cheap — no mining — but they are easy ones; a real corpus with '
                 'near-duplicate documents needs harder negatives.</details>'
             ),
@@ -585,7 +583,7 @@ TEMPLATE = {
                 "test the cell prints the paired comparison: each query's reciprocal rank under both models, the MRR difference, how many queries "
                 "improved or got worse, and a paired bootstrap 95 % interval. The stop that keeps a broken run from exporting reads **validation**: on "
                 "the Banking77 sample under the pre-registered settings an adapted validation MRR that is not above the frozen one stops the cell; "
-                "results on the fresh test are verdicts only, never stops. **Fresh test 1** (scored once, 2026-10-17, bf16 recipe; now an exposed test) is shown "
+                "results on the fresh test are verdicts only, never stops. **Fresh test 1** (scored under the recipe-1 pre-registered settings on 2026-10-17; now an exposed test) is shown "
                 "every run for continuity, like the exposed development test, and is never a selection input or a stop. When the pre-registered rule kept the frozen model (`keep_frozen`), that stop does "
                 "not apply: the frozen model is the system scored on the fresh test, and Section 9 writes the rejected adapter under a `_not_selected` name. "
                 "The adapted validation numbers were used to choose the epoch and the configuration, so they are optimistic; the fresh test is the "
@@ -663,7 +661,7 @@ TEMPLATE = {
                 "    exploratory_runs += 1\n"
                 "    run_tag = f'_exploratory_{{exploratory_runs}}'\n"
                 "    print({{'test_look': look, 'settings_differing': settings_differing, 'note': 'exploratory: validation and the exposed development test only; the fresh test was not read'}})\n"
-                "# Fresh test 1 (scored once, 2026-10-17, bf16 recipe) is now an exposed test: shown for continuity, never a selection input or a stop.\n"
+                "# Fresh test 1 (scored under the recipe-1 pre-registered settings on 2026-10-17) is now an exposed test: shown for continuity, never a selection input or a stop.\n"
                 "fresh1_result = None\n"
                 "if fresh1_records:\n"
                 "    f1_frozen = pipe.evaluate_base(fresh1_records, instruction=INSTRUCTION, candidates=document_set)\n"
@@ -712,9 +710,9 @@ TEMPLATE = {
         {
             "md": (
                 '**What to notice:** the four rows side by side, `delta_vs_frozen`, `median_rank`, and the `verdict`.\n\n<details><summary>Check your '
-                'reasoning</summary>Recall@1. On the exposed development test, in the Colab CLI T4 runs of 9 and 17 October 2026 (blobs `26a62b80` and `971187e6`, identical; recipe 1, bfloat16 training on CUDA; not re-run for this revision), recall@1 rose 0.6312 → 0.7662 (+0.135) but recall@10 only 0.9377 → 0.9896 (+0.052): the frozen model '
-                'already had the right intent near the top, and fine-tuning mostly moved it to first place. MRR went 0.741 → 0.8498 and the verdict was *improved*. Those queries '
-                'had been used to choose the old default, so read the fresh-test row and its interval for this revision; its recorded value is in `docs/release-verification.md` once the hosted run exists.</details>'
+                'reasoning</summary>Recall@1. On the exposed development test, in the hosted Colab CLI T4 run of 18 October 2026 (blob `de48070a`, commit `9ca75dc`; recipe 2, float32; the recipe-2 evaluation of record), recall@1 rose 0.6338 → 0.8026 (+0.1688, 65 of 385 queries) but recall@10 only 0.9403 → 0.9948 (+0.0545): the frozen model '
+                'already had the right intent near the top, and fine-tuning mostly moved it to first place. MRR went 0.7422 → 0.8785 and the verdict was *improved*. Those queries '
+                'had been used to choose the old default, so read the fresh-test row and its interval for this revision: on fresh test 2 the same run gave MRR 0.727 → 0.860 (+0.132; 95 % CI 0.111 to 0.155 over queries, 0.089 to 0.175 over intents).</details>'
             ),
         },
         {
@@ -810,12 +808,12 @@ TEMPLATE = {
                 "**What to notice:** the frozen and adapted top-3 for the three probes, `document_shift`, the artifact's size, and `reload_parity`.\n\n<details><summary>Check "
                 'your reasoning</summary>Every vector moves, because the adapter changes layers all inputs share: the self-cosine of each document to its frozen '
                 'version is below 1, so cosines from the two models are not comparable. In the recorded run the reloaded adapter gave identical query vectors and the '
-                'same MRR on the 154 validation queries in the T4 run of 17 October 2026 (blob `971187e6`, recipe 1: 0.787748 in memory and reloaded, vectors identical).</details>'
+                'same MRR on the 154 validation queries in the recipe-2 T4 record of 18 October 2026 (blob `de48070a`: 0.828415 in memory and reloaded, vectors identical; recipe 1 gave 0.787748).</details>'
             ),
         },
         {
             "md": (
-                "## 10. Optional transfer check: CLINC150 (display only)\n\nBanking77 may be in the model's training data (DAT9), so this cell asks two questions on a corpus that is **not an MTEB task**, CLINC150 [5] (150 intents in ten domains). `fetch_transfer_corpus` downloads its `data_full.json` at a pinned commit and refuses a size or SHA-256 mismatch; `build_transfer_set` draws 2 in-scope test queries per intent (300) and refuses any draw but the pinned one. Two of the ten domains, `banking` and `credit_cards`, are close to Banking77's own (balance, transfer, card declined, PIN change ...), so the check is reported in two rows, each ranked against its own intent phrases: **near-domain transfer** (60 queries, 30 phrases) and **the other 8 domains** (240 queries, 120 phrases: travel, kitchen, small talk, work ...), which is the only row that says anything about *other domains*. Both models embed with the same instruction (`TRANSFER_INSTRUCTION`); each row prints recall@1 and MRR beside the random floor and the lexical baseline, and the paired MRR difference with a query-level and an intent-level bootstrap 95 % interval. **Display only:** it is never a selection input and never a stop; whether CLINC150 was in Qwen3-Embedding's training data is undisclosed too, so it is a transfer check, not an out-of-distribution guarantee. It took 11 s on a T4 under recipe 1. Set `RUN_TRANSFER_CHECK = False` to skip it.\n\n**Predict before running:** the adapter was trained on 77 banking intents. Will it help more on the near-domain row or on the other 8 domains, and could it hurt there?"
+                "## 10. Optional transfer check: CLINC150 (display only)\n\nBanking77 may be in the model's training data (DAT9), so this cell asks two questions on a corpus that is **not an MTEB task**, CLINC150 [5] (150 intents in ten domains). `fetch_transfer_corpus` downloads its `data_full.json` at a pinned commit and refuses a size or SHA-256 mismatch; `build_transfer_set` draws 2 in-scope test queries per intent (300) and refuses any draw but the pinned one. Two of the ten domains, `banking` and `credit_cards`, are close to Banking77's own (balance, transfer, card declined, PIN change ...), so the check is reported in two rows, each ranked against its own intent phrases: **near-domain transfer** (60 queries, 30 phrases) and **the other 8 domains** (240 queries, 120 phrases: travel, kitchen, small talk, work ...), which is the only row that says anything about *other domains*. Both models embed with the same instruction (`TRANSFER_INSTRUCTION`); each row prints recall@1 and MRR beside the random floor and the lexical baseline, and the paired MRR difference with a query-level and an intent-level bootstrap 95 % interval. **Display only:** it is never a selection input and never a stop; whether CLINC150 was in Qwen3-Embedding's training data is undisclosed too, so it is a transfer check, not an out-of-distribution guarantee. It took 8.3 s on the recorded T4 run (11 s under recipe 1). Set `RUN_TRANSFER_CHECK = False` to skip it.\n\n**Predict before running:** the adapter was trained on 77 banking intents. Will it help more on the near-domain row or on the other 8 domains, and could it hurt there?"
             ),
             "code": (
                 "RUN_TRANSFER_CHECK = True  # @param {{type:\"boolean\"}}\n"
@@ -851,7 +849,7 @@ TEMPLATE = {
         },
         {
             "md": (
-                "**What to notice:** the two rows separately, each MRR difference and whether its intervals exclude 0, and how many queries improved against those that got worse.\n\n<details><summary>Check your reasoning</summary>The recorded T4 run of 17 October 2026 (blob `971187e6`, recipe 1) gave near-domain +0.0227 (95 % CI −0.0097 to 0.0579) and other 8 domains −0.0159 (−0.0348 to 0.0022): both intervals include 0. Recipe 2 has no recorded value yet. Read the rows apart: the near-domain row asks whether the banking adaptation transfers to nearby finance intents; only the other-8-domains row speaks to other domains. There, an interval above 0 means the adaptation also sharpened intent retrieval outside finance, an interval below 0 means it specialised the model at a cost to those domains, and an interval across 0 means this check cannot tell; with 240 queries it can only detect fairly large changes. Pooling the two rows would mix a likely gain with a possible loss. None of it changes the configuration chosen in Section 7.</details>"
+                "**What to notice:** the two rows separately, each MRR difference and whether its intervals exclude 0, and how many queries improved against those that got worse.\n\n<details><summary>Check your reasoning</summary>The recorded T4 run of 17 October 2026 (blob `971187e6`, recipe 1) gave near-domain +0.0227 (95 % CI −0.0097 to 0.0579) and other 8 domains −0.0159 (−0.0348 to 0.0022): both intervals include 0. The recipe-2 record (T4, 18 October 2026, blob `de48070a`) gave near-domain +0.0595 (95 % CI 0.019 to 0.1082; intents 0.0195 to 0.1085), which excludes 0, and other 8 domains −0.0209 (−0.0418 to −0.0017 over queries, which excludes 0; −0.046 to 0.0026 over intents, which includes it). Read the rows apart: the near-domain row asks whether the banking adaptation transfers to nearby finance intents; only the other-8-domains row speaks to other domains. There, an interval above 0 means the adaptation also sharpened intent retrieval outside finance, an interval below 0 means it specialised the model at a cost to those domains, and an interval across 0 means this check cannot tell; with 240 queries it can only detect fairly large changes. Pooling the two rows would mix a likely gain with a possible loss. None of it changes the configuration chosen in Section 7.</details>"
             ),
         },
     ],
@@ -859,11 +857,11 @@ TEMPLATE = {
         "## Interpretation and limits\n\n"
         "Read the fresh-test row of Section 8 first: it is the only number here that played no part in any choice (its recorded hosted value is in "
         "`docs/release-verification.md`), and its intent-level interval is the more cautious of its two intervals. For recipe 1 the record is +0.112 MRR on "
-        "fresh test 1 (0.7338 → 0.8455, 95 % CI 0.091 to 0.134; T4, 17 October 2026, blob `971187e6`); this revision's float32 recipe is read on fresh test 2. "
-        "In the previous blob's recorded runs the frozen embedder already retrieved the right intent phrase for well over half of the "
+        "fresh test 1 (0.7338 → 0.8455, 95 % CI 0.091 to 0.134; T4, 17 October 2026, blob `971187e6`); for recipe 2 the record is MRR 0.727 → 0.860 (+0.132; 95 % CI 0.111 to 0.155 over queries, 0.089 to 0.175 over intents) on fresh test 2 (T4, 18 October 2026, blob `de48070a`). "
+        "In the recipe-2 T4 record the frozen embedder already retrieved the right intent phrase for well over half of the "
         "exposed-development-test messages (recall@1 in the sixties against a lexical baseline in the thirties and a random floor of 1.3 %), "
-        "and a bounded contrastive fine-tuning of the last two decoder layers on 616 pairs lifted recall@1 on those queries by more than ten "
-        "points and MRR by about a tenth, with a 126 MB float32 adapter (63 MB in recipe 1's bfloat16) that reloads to identical vectors. Because Banking77 may be in the model's "
+        "and a bounded contrastive fine-tuning of the last two decoder layers on 616 pairs lifted recall@1 on those queries by 16.9 "
+        "points and MRR by 0.136, with a 126 MB float32 adapter (63 MB in recipe 1's bfloat16) that reloads to identical vectors. Because Banking77 may be in the model's "
         "training data (DAT9), the frozen number may be in-distribution, and because those queries chose the old default, the fresh-test row "
         "and its interval are the numbers to read for this revision. That is "
         "the claim: the adaptation contract can adapt the embedder to a retrieval task end to end on a real labelled "
@@ -874,7 +872,7 @@ TEMPLATE = {
         "for any other use. The adapter changes the last layers, which every input shares, so every vector shifts (Section "
         "9 prints each document's cosine to its frozen self) and cosine values from the adapted model are not comparable "
         "to the frozen model's; nothing here measures the effect on other tasks. Since amendment 1 the model runs in float32 on every "
-        "device, so a GPU run should be close to the CPU float32 numbers but not identical to the last digit; recipe 1 trained in bfloat16 on CUDA and fell 0.03–0.10 MRR below CPU on validation.\n\n"
+        "device, and the recorded T4 run equalled the CPU float32 build record at printed precision on every validation, exposed-test and transfer number; recipe 1 trained in bfloat16 on CUDA and fell 0.03–0.10 MRR below CPU on validation.\n\n"
         "Three things to carry to real data. **Floors first:** the random floor and the lexical baseline on *your* "
         "documents are the numbers to read before any embedder's; a lexical baseline near the frozen model means the task "
         "is mostly keyword matching. **Leakage:** de-duplicate queries across splits (the contract does this "
@@ -901,8 +899,8 @@ TEMPLATE = {
         "5. **Explain.** Say in one sentence what the second layer added, and whether that is worth twice the adapter size for this task.\n\n"
         "To put the notebook back to the pre-registered state, set `TRAINABLE_LAYERS = 0` (the grid's selection) and run Sections 7b, 8 and 9 again.\n\n"
         "<details><summary>Check your reasoning</summary>Expect a smaller gain, not none: the frozen model already ranks the right intent near the top, "
-        "and one layer can still reorder the last few places, so recall@1 still rises but by less than the old default's +13.5 points (exposed development test, previous blob's T4 runs of 19 September and 9 October 2026). "
-        "The exact figure depends on the device; what matters is the direction and the adapter-size trade-off.</details>\n\n"
+        "and one layer can still reorder the last few places, so recall@1 still rises but by less than the default's +16.9 points (exposed development test, recipe-2 T4 record of 18 October 2026). "
+        "The exact figure is the one your run prints; what matters is the direction and the adapter-size trade-off.</details>\n\n"
         "**More experiments (same procedure, they do not affect the default path):** set `TEMPERATURE = 0.2` and read whether the softer "
         "contrast learns as fast; set `EPOCHS = 4` and watch whether validation MRR keeps rising or turns (the best epoch is kept either way); "
         "change `INSTRUCTION` in Section 4, **run Section 4**, then Sections 5–6 to re-read the frozen numbers (to adapt as well, set `RUN_GRID = False` first: the run is exploratory anyway) — the model is instruction-aware; or bring "
@@ -916,8 +914,8 @@ TEMPLATE = {
         'keep working. After a session restart, run from the top.\n- **Section 3 reports a size or SHA-256 mismatch, or cannot reach the Hub** — the message '
         'names the file. Delete it from the snapshot folder Section 3 prints and run Section 3 again.\n- **Section 4 reports a size or SHA-256 mismatch for a '
         'Banking77 file** — the download from `raw.githubusercontent.com` was cut short or altered. Run Section 4 again; a verified cached file is reused.\n- '
-        '**Section 7 is slow** — on CPU each grid configuration takes several minutes and the grid trains three; switch to a T4 GPU for a faster run (float32 there too since amendment 1).\n- **Your numbers differ from the recorded run** — the recorded hosted run used recipe 1 (bfloat16 training on CUDA); this revision '
-        'trains in float32, so adapted numbers will differ by more than rounding, and CPU and GPU float32 still differ in low-order digits; the comparison between systems, '
+        '**Section 7 is slow** — on CPU each grid configuration takes several minutes and the grid trains three; switch to a T4 GPU for a faster run (float32 there too since amendment 1).\n- **Your numbers differ from the recorded run** — the recipe-2 record (18 October 2026) trained in float32 on a T4 and equalled the CPU float32 build '
+        'record at printed precision; if a number differs, read `settings_differing` and the versions Section 2 prints. The comparison between systems, '
         'not the last digit, is the result.\n- **BYOD: \"CSV is missing columns\" or a record refusal** — the message names the rule: columns `id`, `query`, '
         '`positive` (optional `negative`), at least 12 distinct queries (8 stay for training) and two distinct positives; set `INSTRUCTION` to describe your retrieval task.\n- **BYOD: '
         '"BYOD_PATH … is not a file"** — the path is relative to the working directory printed in the message; give one .csv, .json or .jsonl file.\n- **BYOD: '
