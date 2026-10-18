@@ -406,6 +406,7 @@ def test_keep_frozen_skips_the_adapted_stop_scores_frozen_and_tags_the_adapter(n
     monkeypatch.chdir(tmp_path)
     (tmp_path / "outputs").mkdir()
     namespace = section_8_namespace(adapted_mrr=adapted_mrr, use_byod=False, preregistered=True, keep_frozen=True)
+    namespace["test_look"] = lambda pre, looks: samples.test_look(pre, looks, None)  # unsuffixed names: before the recipe-2 record
     exec(compile(_cell(notebook, "delta_mrr = "), "<section 8>", "exec"), namespace)
     fresh_ids = tuple(r["id"] for r in FRESH)
     assert ("frozen", fresh_ids) in namespace["pipe"].scored and ("adapted", fresh_ids) not in namespace["pipe"].scored
