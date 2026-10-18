@@ -683,3 +683,18 @@ Status stays **Candidate**. Gates 3 and 4 above (real-model BYOD and the optiona
 | BYOD | not assessed in this run |
 
 Status stays **Candidate**. Gates 3 and 4 above (real-model BYOD and the optional sweep) remain open.
+
+## Execution-log redaction (2026-10-18)
+
+The four committed Colab CLI `exec.log` files named the operator's home directory in their two
+`[colab] ... notebook` lines. Those two lines now read `<local-run-dir>/...`; no other byte changed, and the
+executed notebooks and `run_summary.json` files are untouched. SHA-256 as captured → as committed:
+
+| Log | Captured | Committed |
+|---|---|---|
+| `2026-10-09-6606b82/exec.log` | `fca046a13c129c2939c670a9c5084dc75e638ce1135a20bbb224668f8769e79d` | `1af7833813bcf271722a4a088be64bbe1060a251f7e38e5e24af448edc8c0afe` |
+| `2026-10-17-1cc43ed/exec.log` | `fe1ba2865426298a65a4973d1ff984ced0764a009517c88d95bf9497a8a023c0` | `261a1c5d688a0d69f9cfbf97b5ec47e30cfb9cca5b2f32f0661aa5f556b709f0` |
+| `2026-10-18-9ca75dc/exec.log` | `5040de3b18b8e60eec8a59ce3cd1489e51aabbb55bf63899c19fde561e327bd5` | `30225288b439bfa535199b69480e89b76f24e16b16c0a7f14761ae957d89d64e` |
+| `2026-10-18-b60347c/exec.log` | `4d702897ae59a279925491d65bc7551831e50269bf6f6f09028792e68410b1c6` | `70b1fd1e5246c4fe4e0c41b3082e53813809a80ee7e2b1f704958914dbab9a5a` |
+
+Hashes quoted elsewhere in this file for these logs are the captured values.
