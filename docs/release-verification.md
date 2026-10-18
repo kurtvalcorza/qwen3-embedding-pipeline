@@ -132,6 +132,9 @@ A known-failing default path in the supported runtime blocks release (REL11).
 
 | Notebook | Commit / notebook blob | Date (UTC) | Executor | Outcome |
 |---|---|---|---|---|
+| `qwen3_embedding_colab.ipynb` (`E2E`) | `b60347c` / `4b94d3eb` | 2026-10-18 | Colab CLI 0.7.4, fresh Colab Tesla T4 (sequential `colab exec -f`, not a browser Run all), `cuda:0`, float32 | **PASSED** — 14/14 code cells, 0 errors, no restart, 381.1 s; **REL13 reproduction of the pre-registered evaluation (recipe 2)** of the `9ca75dc` record: fresh test 2 MRR 0.7274 → 0.8595, paired +0.1321 (95 % CI 0.111 to 0.1547; intents 0.0886 to 0.1748), equal to the record (section *2026-10-18 hosted T4 reproduction, recipe 2* below) |
+| `qwen3_embedding_colab.ipynb` (`E2E`) | `9ca75dc` / `de48070a` | 2026-10-18 | Colab CLI 0.7.4, fresh Colab Tesla T4 (sequential `colab exec -f`, not a browser Run all), `cuda:0`, float32 | **PASSED** — 14/14 code cells, 0 errors, no restart, 346.8 s; **REL13: pre-registered evaluation of record for recipe 2** on fresh test 2 (record section *2026-10-18 hosted T4 evaluation of record, recipe 2* below); the 2026-10-17 row stays the recipe-1 record |
+| `qwen3_embedding_colab.ipynb` (`E2E`) | `1cc43ed` / `971187e6` | 2026-10-17 | Colab CLI 0.7.4, fresh Colab Tesla T4 (sequential `colab exec -f`, not a browser Run all), `cuda:0`, bfloat16 | **PASSED** — 14/14 code cells, 0 errors, no restart, 382.9 s; **REL13: pre-registered evaluation of record** for the fresh test (record section *2026-10-17 hosted T4 evaluation of record* below) |
 | `qwen3_embedding_colab.ipynb` (`E2E`) | `ec6dd95` / `f3475b93` | 2026-09-19 | Kaggle Tesla T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v3; image `torch 2.10.0+cu128` / `transformers 5.0.0` before the pinned install, `torch 2.14.0+cu130` / `transformers 4.57.6` after, Python 3.12.13, `cuda:0`) | **PASSED** — 11/11 code cells ok (1 restart after install cell); 26 files, 1209 MB staged from the Hub into a clean cache; comparison {recall@1: {random_floor: 0.013, lexical: 0.3065, frozen: 0.6312, adapted: 0.7662}, recall@5: {random_floor: 0.0649, lexical: 0.5039, frozen: 0.8857, adapted: 0.9714}, recall@10: {random_floor: 0.1299, lexical: 0.6753, frozen: 0.9377, adapted: 0.9896}, mrr: {random_floor: 0.064, lexical: 0.4159, frozen: 0.741, adapted: 0.8498}, median_rank: {lexical: 5, frozen: 1, adapted: 1}, delta_vs_frozen: {recall@1: 0.1351, recall@5: 0.0857, recall@10: 0.0519, mrr: 0.1087}}; reload parity {query_vectors_identical: True, mrr_in_memory: 0.8125, mrr_reloaded: 0.8125}; run summary and executed notebook archived under `.agent/backups/kaggle-e2e-2026-09-19/out/dimer-nb2-qwen3-embedding/v3/evidence/` in the workspace |
 | `qwen3_embedding_colab.ipynb` (`E2E`) | `9bcb449` / `40e0a136` | 2026-09-19 | Local pre-flight harness (Windows, CPython 3.12.10, CPU, `google.colab` shim, pins pre-installed) | PASS — pre-flight only, **not** promotion evidence |
 | `qwen3_embedding_colab.ipynb` (`TASK-INFERENCE`, superseded) | `cbeec85` / `7715612eea32` | 2026-09-14 | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | PASSED — 8/8 code cells, 234.2 s, 1,207 MB staged; evidence for the earlier inference-only notebook, not for the `E2E` blob |
@@ -145,7 +148,10 @@ general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
-| 2026-10-09 (02:00:47 UTC start) | commit `6606b82` / blob `26a62b8096aa26ad870987d1fa5c0c17b7cf5753` (`NOTEBOOK_SOURCE.repository_revision` `9c8dc93`, the source revision the notebook was generated from; `9c8dc93..6606b82` are the review-fix commit and a test-only commit; generator `build_notebook.py/2.2`, `notebook_spec` 2.2) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 55 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default sample path only (USE_BYOD = False, default form values); 11 snapshot files fetched from the Hub and digest-verified | 201.4 s | **PASSED — one pass, no restart, 0 errors**: 12/12 code cells (the three carried-module cells print nothing); near-duplicates validation 5 / test 9 (Jaccard ≥ 0.8); input manifest 77 documents; random floor recall@1 0.013 / MRR 0.064; lexical 0.3065 / 0.4159; frozen 0.6312 / 0.741 (`adapted: False`); validation MRR 0.6962 → 0.7664 → 0.7877, best epoch 2; adapted 0.7662 / 0.8498 (Δ recall@1 +0.1351, MRR +0.1087, verdict *improved*); document self-cosine median 0.8458; reload parity exact (query vectors identical, MRR 0.812533 both ways); six exports. These match the worked answers. Evidence [`docs/execution-evidence/2026-10-09-6606b82/`](execution-evidence/2026-10-09-6606b82/): executed notebook SHA-256 `f3cc25d398b92b95083a8f3ac0302ea7057f7a151e62aba55a6231bad2a98a8b`, `run_summary.json` `d4c7af9a0a6b05f63000b94af356c9ebd90960c1efd375985a7cd5c13a31fbfb`, `exec.log` `fca046a13c129c2939c670a9c5084dc75e638ce1135a20bbb224668f8769e79d`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
+| 2026-10-18 (01:56:04 UTC start) | commit `b60347c` / blob `4b94d3ebc3fc9b562b11d7466720b1c622442990` (PR #14 head; `NOTEBOOK_SOURCE.repository_revision` `898cbd3`; generator `build_notebook.py/2.2`, `notebook_spec` 2.5) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM (session `suite-qwen3-b60347c-3e4c`), Tesla T4; blob fetched at the 40-char SHA and Git-blob verified, no repository checkout; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, 51 s); `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, float32 | Default sample path only (`USE_BYOD = False`, default form values, no `# @param` edits); 11 snapshot files fetched and digest-verified | 381.1 s | **PASSED — REL13 reproduction of the pre-registered evaluation (recipe 2)** (`test_look` "reproduction", `preregistered` True, `settings_differing` [], outputs `_reproduction_1`): 14/14 code cells, 0 errors; every printed metric equal to the `9ca75dc` recipe-2 evaluation of record (grid C0 / C1 / C2 0.8284 / 0.7962 / 0.827 → C0; fresh test 2 frozen 0.613 / 0.7274, adapted 0.7727 / 0.8595, Δ MRR +0.1321 [0.111, 0.1547], intents [0.0886, 0.1748], 240 / 44 / 486; fresh test 1 (exposed) 0.7324 → 0.8666; exposed development test 0.6338 / 0.7422 → 0.8026 / 0.8785; transfer +0.0595 / −0.0209; reload parity 0.828415; adapter 125,849,896 B, SHA-256 prefix `d0e19c8ede726c98` equal). Evidence [`docs/execution-evidence/2026-10-18-b60347c/`](execution-evidence/2026-10-18-b60347c/): executed notebook SHA-256 `4671d3fbebcc094811d4426052d320ba5869f5880f3f71d2e3696ac947b671d0`, `exec.log` `4d702897ae59a279925491d65bc7551831e50269bf6f6f09028792e68410b1c6`, `run_summary.json` `d8573dba91dc9ce85358c16b41d6b8565a2d47cb55864559f67174dce5066918`, byte for byte. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
+| 2026-10-18 (00:38:29 UTC start) | commit `9ca75dc` / blob `de48070a3621ed61529948a1b1f3a0e671bf9ed4` (PR #14 head; `NOTEBOOK_SOURCE.repository_revision` `f7f3dc0`; generator `build_notebook.py/2.2`, `notebook_spec` 2.5) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM (session `suite-qwen3-9ca75dc-3e4c`), Tesla T4; blob fetched at the 40-char SHA and Git-blob verified, no repository checkout; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, 51 s); `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, float32 | Default sample path only (`USE_BYOD = False`, default form values, `RUN_GRID` on); 11 snapshot files fetched and digest-verified | 346.8 s | **PASSED — REL13 pre-registered evaluation of record, recipe 2** (`preregistered` True, `settings_differing` []): 14/14 code cells, 0 errors; grid C0 / C1 / C2 validation MRR 0.8284 / 0.7962 / 0.827 → C0; fresh test 2 (770, `cd017128…`) frozen 0.613 / 0.7274, adapted 0.7727 / 0.8595 (recall@1 / MRR), Δ MRR +0.1321 [0.111, 0.1547] queries, [0.0886, 0.1748] intents; fresh test 1 (exposed) 0.7324 → 0.8666; exposed development test 0.7422 → 0.8785; reload parity exact (0.828415); adapter 125,849,896 B. Evidence [`docs/execution-evidence/2026-10-18-9ca75dc/`](execution-evidence/2026-10-18-9ca75dc/): executed notebook SHA-256 `5e4be566f847e0abf6e1646ea5197d78b3199b7ef21fc26670ed2b3bbe3a1843`, `exec.log` `5040de3b18b8e60eec8a59ce3cd1489e51aabbb55bf63899c19fde561e327bd5`, `run_summary.json` `b906a6440e7784aca9461147ed6e1106dfc8e8dd2a91f6ca1bdf1faeb81dc419`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
+| 2026-10-17 (17:42:18 UTC start) | commit `1cc43ed` / blob `971187e6a67b878a6ce11c19c0b297c9d512d719` (PR #14 head; `NOTEBOOK_SOURCE.repository_revision` `6a90df9`; `6a90df9..1cc43ed` are the regenerated notebook and a docs-only commit; generator `build_notebook.py/2.2`, `notebook_spec` 2.5) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 44 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default path only, form values at their defaults (no `# @param` edits; the fetched source is byte-equal to the blob); 11 snapshot files fetched from the Hub and digest-verified; `preregistered` True, `settings_differing` [] | 382.9 s (session wall, `run_summary.json`) | **PASSED — REL13: pre-registered evaluation of record** (first hosted run of the pre-registered settings; first scoring of the fresh test by any run): 14/14 code cells, 0 error outputs, no restart; grid C0 / C1 / C2 validation MRR 0.7877 / 0.7197 / 0.7299 (frozen 0.6962) → C0; **fresh test (770): frozen recall@1 0.6351 / MRR 0.7338 → adapted 0.761 / 0.8455, paired MRR difference +0.1118 (95 % CI 0.0911 to 0.134 query-level, 0.0711 to 0.1569 intent-level; 215 improved, 39 worse)**; exposed development test 0.6312 / 0.741 → 0.7662 / 0.8498; CLINC150 near-domain +0.0227 (CI −0.0097 to 0.0579), other 8 domains −0.0159 (CI −0.0348 to 0.0022). Evidence [`docs/execution-evidence/2026-10-17-1cc43ed/`](execution-evidence/2026-10-17-1cc43ed/): executed notebook SHA-256 `fa6a801d4dd305b69b0aa36be805316e97e09769c4ff5d80f8a9314770e3bbdf`, `run_summary.json` `e411bcee379b7a40f9803ea65252e71f8beeb3b4d7f06bbc9a69ed30af2b3f2c`, `exec.log` `fe1ba2865426298a65a4973d1ff984ced0764a009517c88d95bf9497a8a023c0`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
+| 2026-10-09 (02:00:47 UTC start) | commit `6606b82` / blob `26a62b8096aa26ad870987d1fa5c0c17b7cf5753` (`NOTEBOOK_SOURCE.repository_revision` `9c8dc93`, the source revision the notebook was generated from; `9c8dc93..6606b82` are the review-fix commit and a test-only commit; generator `build_notebook.py/2.2`, `notebook_spec` 2.2) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 55 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default sample path only (USE_BYOD = False, default form values); 11 snapshot files fetched from the Hub and digest-verified | 201.4 s | **REL13: earlier-blob history** (blob `26a62b80`, before the pre-registration). **PASSED — one pass, no restart, 0 errors**: 12/12 code cells (the three carried-module cells print nothing); near-duplicates validation 5 / test 9 (Jaccard ≥ 0.8); input manifest 77 documents; random floor recall@1 0.013 / MRR 0.064; lexical 0.3065 / 0.4159; frozen 0.6312 / 0.741 (`adapted: False`); validation MRR 0.6962 → 0.7664 → 0.7877, best epoch 2; adapted 0.7662 / 0.8498 (Δ recall@1 +0.1351, MRR +0.1087, verdict *improved*); document self-cosine median 0.8458; reload parity exact (query vectors identical, MRR 0.812533 both ways); six exports. These match the worked answers. Evidence [`docs/execution-evidence/2026-10-09-6606b82/`](execution-evidence/2026-10-09-6606b82/): executed notebook SHA-256 `f3cc25d398b92b95083a8f3ac0302ea7057f7a151e62aba55a6231bad2a98a8b`, `run_summary.json` `d4c7af9a0a6b05f63000b94af356c9ebd90960c1efd375985a7cd5c13a31fbfb`, `exec.log` `fca046a13c129c2939c670a9c5084dc75e638ce1135a20bbb224668f8769e79d`. Not exercised: BYOD (REL12), the activity and the optional experiments, a browser Run all |
 | 2026-10-14 (23:27:48 UTC start) | commit `7dbcc38` / blob `089696de` (`DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb`, PR #13 head; `notebook_spec` 2.5) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab VM, Tesla T4; kernel Python 3.13.15; uv isolated environment CPython 3.12.12 (47 locked packages, built in 52 s), `torch 2.14.0+cu130`, `transformers 4.57.6`, embedder and reranker both on `cuda:0`, bfloat16 | Default path only (USE_BYOD=False, RUN_K_SWEEP=False, seed 42, K=6; no toggles changed); both snapshots fetched from the Hub and digest-verified | 164.5 s (session wall, `run_summary.json`) | **PASSED** — 19/19 code cells in order, 0 error outputs, no restart; embedding recall@1 0.6104 / MRR over 77 0.7310; two-stage recall@1 0.6234 / MRR@6 0.7379; helped / hurt 29 / 24; every computed number equal to the 2026-10-04 run of `d72ea820`; new paired view +17 / −15 (exact sign test p = 0.86), embedding top-6 MRR@6 0.7241; [executed notebook](execution-evidence/2026-10-14/DIMER_Qwen3_Semantic_Search_Reranking_Workshop_7dbcc38_colab-cli-t4.ipynb) |
 | 2026-10-04 | `2996bb2` / `d72ea820` (`DIMER_Qwen3_Semantic_Search_Reranking_Workshop.ipynb`) | Google Colab (browser, maintainer-run), Tesla T4; kernel Python 3.13.15, uv isolated environment CPython 3.12.12 (47 locked packages), `torch 2.14.0+cu130`, `transformers 4.57.6`, `cuda:0`, bfloat16 | Default path only (USE_BYOD=False, RUN_K_SWEEP=False, seed 42, K=6; no toggles changed), Run all | not recorded (no per-cell timing saved; isolated setup 65 s, index 11.3 s, rerank 37.2 s) | **PASSED** — 19/19 code cells, execution counts 1..19, 0 error outputs, no restart; two-stage recall@1 0.6234, MRR 0.7379 (identical to the 2026-09-26 run of `5512be30`); [executed notebook](execution-evidence/2026-10-04/DIMER_Qwen3_Semantic_Search_Reranking_Workshop_2996bb2_colab-browser-t4.ipynb) |
 | 2026-09-19 | `ec6dd95` / `f3475b93` | Kaggle Tesla T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v3; image `torch 2.10.0+cu128` / `transformers 5.0.0` before the pinned install, `torch 2.14.0+cu130` / `transformers 4.57.6` after, Python 3.12.13, `cuda:0`) | Default sample path, `Run all` from a fresh interpreter with an empty Hugging Face cache and no repository checkout (blob SHA-1 verified against GitHub before execution) | 323.6 s | **PASSED** — 11/11 code cells ok (1 restart after install cell); 26 files, 1209 MB staged from the Hub into a clean cache; comparison {recall@1: {random_floor: 0.013, lexical: 0.3065, frozen: 0.6312, adapted: 0.7662}, recall@5: {random_floor: 0.0649, lexical: 0.5039, frozen: 0.8857, adapted: 0.9714}, recall@10: {random_floor: 0.1299, lexical: 0.6753, frozen: 0.9377, adapted: 0.9896}, mrr: {random_floor: 0.064, lexical: 0.4159, frozen: 0.741, adapted: 0.8498}, median_rank: {lexical: 5, frozen: 1, adapted: 1}, delta_vs_frozen: {recall@1: 0.1351, recall@5: 0.0857, recall@10: 0.0519, mrr: 0.1087}}; reload parity {query_vectors_identical: True, mrr_in_memory: 0.8125, mrr_reloaded: 0.8125}; run summary and executed notebook archived under `.agent/backups/kaggle-e2e-2026-09-19/out/dimer-nb2-qwen3-embedding/v3/evidence/` in the workspace |
@@ -153,6 +159,10 @@ general estimates.
 | 2026-09-14 | `cbeec85` / `7715612eea32` (`TASK-INFERENCE`, superseded) | Kaggle T4 (`kurtvalcorza/dimer-nb2-qwen3-embedding` v2) | Default sample path of the inference-only notebook: the four README sentences, `stage_missing_files` fetching `model.safetensors` from the Hub, `verify_snapshot` over 11 files, query/document embedding with the cosine check, `not-measurable` report, CSV + JSON exports | 234.2 s | **PASSED** — 8/8 code cells, 1,207 MB staged; history only |
 
 ## Primary embedding tutorial status
+
+**Current (2026-10-18), recipe 2.** Blob `de48070a` (PR #14 head `9ca75dc`) ran the first hosted pre-registered pass of recipe 2 (float32) on a fresh Colab Tesla T4 (Colab CLI, 14/14 cells, 0 errors, no restart, 346.8 s); that run is the **recipe-2 evaluation of record** on fresh test 2 (MRR 0.7274 → 0.8595, paired +0.1321, 95 % CI 0.111 to 0.1547; record section below). Blob `4b94d3eb` (PR #14 head `b60347c`) is its **reproduction** on a second fresh Colab T4 the same day (14/14 cells, 0 errors, no restart, 381.1 s; every printed metric equal; section *hosted T4 reproduction, recipe 2* below). The recipe-1 record that follows is unchanged. Hosted BYOD (REL12) and the activity are not run, so status stays **Candidate** (REL14).
+
+**Recipe 1 (2026-10-17).** Blob `971187e6` (PR #14 head `1cc43ed`) ran its first hosted pre-registered pass on a fresh Colab Tesla T4 (Colab CLI, 14/14 cells, 0 errors, no restart); that run is the **evaluation of record** for the fresh test (record section below). Later hosted runs with identical pre-registered settings are reproductions. Hosted BYOD (REL12) and the activity are not run, so status stays **Candidate** (REL14). The paragraphs below are **REL13: earlier-blob history**.
 
 **Candidate.** The `E2E` notebook blob `f3475b93` (committed at `ec6dd95`) executed top-to-bottom in a clean Kaggle Tesla T4 runtime on 2026-09-19 (11/11 ok, 323.6 s, 26 files, 1209 MB fetched from the Hub and digest-verified inside the notebook) with no repository checkout, but it needed **one manual restart after the install cell** (pass 1 raised the stale-import guard: cuda-bindings 12.9.4 → 13.4.2, NumPy 2.0.2 → 2.5.3). A restart-assisted run does not meet the no-restart gate (RUN10/ENV6), so that record is history, not release evidence; the earlier "Release-grade" label is withdrawn.
 
@@ -167,6 +177,389 @@ The Notebook Review Framework v1 review of `f9f5c81` (`docs/reviews/`) found fou
 - **QEM-m1..m4:** `BYOD_PATH`; leakage check ignores case, punctuation and spacing and near-paraphrases are counted; the input manifest covers all 77 documents; Section 7's figures name their device.
 
 Local checks (pytest, Ruff, the validator, both generator `--check`s, and a CPU real-weights run of the regenerated cells with the install skipped) are not clean-runtime evidence. On 2026-10-09 the review-fix blob `26a62b80` (commit `6606b82`) completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-09 (Colab CLI sequential execution, 12/12 code cells, 201.4 s; held-out recall@1 0.6312 → 0.7662, MRR 0.741 → 0.8498; reload parity exact) — row at the top of *Recorded executions*. That closes the no-restart gate (RUN10/ENV6) for the default path on Colab T4. BYOD on a hosted runtime (REL12) and the activity were not run, so status stays **Candidate** (REL14).
+
+### 2026-10-17 row-72 review fixes (R72-M1..M3, R72-m1..m3)
+
+Pre-registration committed alone first: `docs/qwen3-embedding-preregistration.md` (validation grid C0/C1/C2, margin 0.02,
+keep-frozen rule, the pinned 770-query fresh test, score-once wiring, the CLINC150 transfer check). The 385 seed-42 test
+queries are the **exposed development test** from this revision on; every number quoted above for them was measured after
+the old default had been chosen on them.
+
+**Fresh test.** test.csv after filtering 3,079 → minus 516 exposed (tutorial 385 + workshop W16 154, 23 shared) → 2,563
+never scored → minus 22 exact repeats of a train.csv message under `query_key` (the review's normalisation found 7; all 7
+are among the 22) → 10 per intent, `random.Random(20261017)` → 770, manifest SHA-256
+`fe68b43ae56b9092ab92f6eeb610b2179222d1dfa04c3eebd9c658ac69c0908f`. Near-paraphrases (token Jaccard ≥ 0.8 vs the training/validation draw) are
+reported, not removed: 39 in the clean pool, 10 in the draw.
+
+**Development looks at the fresh test: none.** Following SCORE_ONCE_RULE item 8, the fixer's CPU check below ran with
+the fresh test masked (built and digest-checked, never scored; a guard aborted the run if any fresh query reached
+`evaluate`). The first hosted T4 run of the pre-registered settings is the evaluation of record; later identical hosted
+runs are reproductions. `samples.RECORDED_EVALUATION` stays `None` until that run is recorded here. *(2026-10-17: the run is recorded below; the constant is still `None` at `1cc43ed` and is a pending code follow-up, so a later identical run still prints "pre-registered evaluation (this runtime)" in-notebook. This file names the record.)*
+
+**REL13: CPU development look (validation + exposed development test only; fresh test masked, never scored).** Recorded as the CPU build record; never used to change a setting after the hosted run. Windows workstation, CPython 3.12, `torch 2.14.0+cpu`,
+`transformers 4.57.6`, float32, `CUDA_VISIBLE_DEVICES=-1`, uncommitted working tree on branch
+`fix/qwen3-embedding-tutorial-review-2026-10-17`, 2026-10-18 (its package logic is that of commit `a93f99e`; the
+edits made before that commit were docstring and line wrapping only). Not a hosted run;
+timings are on a shared machine.
+
+| Config | Layers | LR | Best epoch | Val recall@1 | Val MRR | Train + val s |
+|---|---|---|---|---|---|---|
+| C0 | 2 | 5e-05 | 2 | 0.7273 | 0.8284 | 417 |
+| C1 | 2 | 2e-05 | 2 | 0.6818 | 0.7962 | 518 |
+| C2 | 4 | 2e-05 | 2 | 0.7208 | 0.8270 | 554 |
+
+Frozen validation MRR 0.6991. Selection: **C0** (no challenger beat C0 by the margin); selected model
+`adapted C0`. Retraining the selected configuration reproduced the grid row exactly (same
+per-epoch validation MRR).
+
+| Split (CPU, float32) | Frozen recall@1 | Frozen MRR | Adapted recall@1 | Adapted MRR |
+|---|---|---|---|---|
+| Validation (154) | 0.5844 | 0.6991 | 0.7273 | 0.8284 |
+| Exposed development test (385) | 0.6338 | 0.7422 | 0.8026 | 0.8785 |
+
+Exposed development test, paired MRR difference 0.1363 (bootstrap 95 % CI 0.1069 to
+0.1664; 115 queries improved, 21 worse); lexical baseline recall@1
+0.3065. Old → new on the exposed development test: the selected configuration is
+C0, so the adapted numbers are those of the old default's configuration retrained under the same fixed settings
+(old CPU build record at `9bcb449`: frozen 63.4 % → adapted 80.3 % recall@1, MRR 0.742 → 0.879).
+
+**Transfer check (CLINC150, display only).** 300 queries / 150 intent phrases, digest `2f45326a…`:
+frozen recall@1 0.6600, MRR 0.7608; adapted recall@1 0.6667,
+MRR 0.7641; paired MRR difference 0.0033 (95 % CI -0.0143 to 0.0217);
+lexical recall@1 0.2933, random-floor MRR 0.0373. CPU stage times: frozen
+evaluation 72.6 s, grid 1488.3 s, selected retrain 372.1 s, adapted evaluation
+72.5 s, transfer 51.0 s.
+
+**Open:** hosted BYOD (REL12). Status stays **Candidate**. *(2026-10-17: the hosted T4 run of the regenerated blob, which was open here, is recorded below as the evaluation of record.)*
+
+### 2026-10-18 peer-review follow-up (row 72, F1-F14)
+
+The peer review of PR #14 traced every path that can score the fresh test and found only Section 8, under
+`preregistered`. Round-2 changes: the transfer check is split by CLINC domain (F1); the keep-frozen rule no longer runs
+into the adapted-above-frozen stop, the frozen model is then the system scored on the fresh test, and a rejected adapter
+is written with a `_not_selected` tag (F2); an intent-level cluster bootstrap is printed beside the pre-registered
+query-level interval, as a disclosed secondary analysis that leaves the verdict rule unchanged (F4); grid records carry
+run counters, and a selection that differs from the first pre-registered grid of the runtime is exploratory (F5);
+`fresh_result` and the evaluation report record device and dtype (F12). The evaluation of record must be a hosted
+**T4, bfloat16** run with the pre-registered settings; a CPU float32 pass is labelled the same way in-notebook but is not
+the record.
+
+**Deviation from the pre-registration's time estimate (F7).** The pre-registration estimated the CPU grid at 10-15 min;
+the 2026-10-17 build record measured 1,488 s (24.8 min; 417-554 s per configuration) on a shared workstation. The
+pre-registration text stays as committed; the notebook's timings now quote the measurement.
+
+**Fresh-test exposure through the workshop (F8).** The semantic-search workshop draws 2 test.csv messages per intent with
+its `SAMPLE_SEED` form field. At seed 42 (every recorded workshop run) none is a fresh-test message; at seeds 0, 1, 7 and
+123 the draw holds 36, 29, 41 and 46 of them (checked 2026-10-18 with `samples.workshop_w16_queries`, data only). Maintainer
+runs of the workshop keep seed 42; any other run is to be recorded here as a fresh-test exposure. The workshop is unchanged.
+
+**REL13: CPU development look — transfer check split (F1), CPU build record, added after the 2026-10-17 record.** The adapted model is C0, retrained
+on CPU with the pre-registered settings (per-epoch validation MRR identical to the grid row). The fresh test was masked.
+Each row ranks against its own intent phrases. The pooled row reproduces the 2026-10-17 numbers exactly.
+
+| Row (CPU, float32) | Queries / phrases | Frozen MRR | Adapted MRR | Delta MRR | 95 % CI, queries | 95 % CI, intents |
+|---|---|---|---|---|---|---|
+| Near-domain (CLINC banking + credit_cards) | 60 / 30 | 0.7238 | 0.7833 | +0.0595 | 0.0190 to 0.1082 | 0.0195 to 0.1085 |
+| Other 8 domains | 240 / 120 | 0.7946 | 0.7736 | -0.0209 | -0.0418 to -0.0017 | -0.0460 to 0.0026 |
+| Pooled (2026-10-17 view) | 300 / 150 | 0.7608 | 0.7641 | +0.0033 | -0.0143 to 0.0217 | -0.0170 to 0.0239 |
+
+Old -> new: the pooled interval across 0 hid a near-domain gain and a small other-domain loss whose query-level interval
+excludes 0 but whose intent-level interval does not. Display only; nothing in the selection changes. On the exposed
+development test the intent-level interval of the paired MRR difference is 0.0877 to 0.1838 (query-level 0.1069 to
+0.1664).
+
+### 2026-10-17 hosted T4 evaluation of record (blob `971187e6`, PR #14 head `1cc43ed`)
+
+**REL13: pre-registered evaluation of record.** This is the first hosted run of the pre-registered settings and the first
+scoring of the fresh test by any run (the CPU checks above masked it). Later hosted runs with identical settings are
+reproductions; a run with any other setting is exploratory and never scores the fresh test.
+
+- **File.** [`docs/execution-evidence/2026-10-17-1cc43ed/`](execution-evidence/2026-10-17-1cc43ed/): executed notebook
+  (SHA-256 `fa6a801d4dd305b69b0aa36be805316e97e09769c4ff5d80f8a9314770e3bbdf`), `exec.log` (`fe1ba286…`) and
+  `run_summary.json` (`e411bcee…`), byte for byte (`-text`).
+- **Source match.** The fetched notebook's `git hash-object` is `971187e6a67b878a6ce11c19c0b297c9d512d719`, the blob at
+  `1cc43ed`, and it is byte-equal to the committed file. All 40 executed cells have the same ids and order, with no
+  source differences and no `# @param` edits. `NOTEBOOK_SOURCE.repository_revision` `6a90df9`, `module_sha256`
+  `00f2ef59…`, generator `build_notebook.py/2.2`, spec 2.5.
+- **Executor.** Colab CLI 0.7.4 (`colab exec -f`) on a fresh Colab VM, Tesla T4 (session `suite-qwen3-1cc43ed-3e4c`).
+  This is sequential CLI execution, not a browser Run all: forms and uploads were not exercised, and the file has no
+  execution counts (order from `exec.log`, cells 1..14). Kernel Python 3.13.15; uv isolated environment CPython 3.12.12,
+  47 locked packages, built in 44 s; `torch 2.14.0+cu130`, `transformers 4.57.6`; `cuda:0`, bfloat16.
+- **Execution.** 14/14 code cells (the three carried-module cells print nothing), 0 error outputs, no restart, session wall
+  382.9 s. 11 snapshot files (1,207,487,471 B) fetched from the Hub and digest-verified. Stage times: grid 138.9 s,
+  selected retrain 47.7 s, transfer check 11.1 s.
+- **Pre-registration.** `preregistered` True, `settings_differing` [], `test_look` "pre-registered evaluation (this
+  runtime)", selected model `adapted C0`, keep-frozen False.
+
+**Validation grid (154 queries; best epoch 2 for every configuration).**
+
+| Config | Layers | LR | Val MRR by epoch 0 → 1 → 2 | Val recall@1 | Val MRR |
+|---|---|---|---|---|---|
+| C0 | 2 | 5e-05 | 0.6962 → 0.7664 → 0.7877 | 0.6753 | 0.7877 |
+| C1 | 2 | 2e-05 | 0.6962 → 0.714 → 0.7197 | 0.5909 | 0.7197 |
+| C2 | 4 | 2e-05 | 0.6962 → 0.719 → 0.7299 | 0.5909 | 0.7299 |
+
+Frozen validation recall@1 0.5779, MRR 0.6962. Selection **C0** ("no challenger beat C0 by the margin": C1 −0.068 and C2
+−0.058 against C0; C0 +0.0915 over frozen, so the adapter is kept). The selected retrain repeated the C0 curve exactly.
+The grid summary line prints `'lr': 0.0001` for C0 and `'lr': 0.0` for C1/C2 because it rounds every float to four
+decimals (`tools/notebook_template.py`, grid summary print); the configuration headers and the final configuration
+(`5e-05`) are correct. Display only; open as a follow-up.
+
+**Fresh test (770 queries, 10 per intent, manifest `fe68b43a…`), the evaluation of record.**
+
+| System | Recall@1 | Recall@5 | Recall@10 | MRR | Median rank |
+|---|---|---|---|---|---|
+| Frozen | 0.6351 | 0.8688 | 0.9312 | 0.7338 | 1 |
+| Adapted C0 | 0.761 | 0.9571 | 0.9779 | 0.8455 | 1 |
+
+Paired MRR difference **+0.1118**, bootstrap 95 % interval **0.0911 to 0.134** (query-level, pre-registered) and
+**0.0711 to 0.1569** (intent-level cluster bootstrap, secondary); 215 queries improved, 39 worse, 516 unchanged. Both
+intervals exclude 0; verdict *improved*. Re-derived from the printed values: every recall × 770 is a whole count (489 →
+586 at recall@1), each MRR lies inside the bounds its recall@1/5/10 allow, and 215 + 39 + 516 = 770. The bootstrap
+intervals were not recomputed: the per-query ranks stayed on the released VM.
+
+**Exposed development test (385; not independent — the old default was chosen on it).** Random floor 0.013 / 0.064,
+lexical 0.3065 / 0.4159, frozen 0.6312 / 0.741, adapted 0.7662 / 0.8498 (recall@1 / MRR; Δ MRR +0.1087). This revision
+prints no paired interval for this split.
+
+**CLINC150 transfer check (display only).**
+
+| Row (T4, bfloat16) | Queries / phrases | Frozen MRR | Adapted MRR | Delta MRR | 95 % CI, queries | 95 % CI, intents | Improved / worse |
+|---|---|---|---|---|---|---|---|
+| Near-domain (CLINC banking + credit_cards) | 60 / 30 | 0.7237 | 0.7464 | +0.0227 | −0.0097 to 0.0579 | −0.0100 to 0.0584 | 12 / 4 |
+| Other 8 domains | 240 / 120 | 0.7940 | 0.7781 | −0.0159 | −0.0348 to 0.0022 | −0.0381 to 0.0062 | 24 / 26 |
+
+Every interval includes 0. This revision prints no pooled 150-phrase row.
+
+**Against the CPU development look (float32, fresh test masked).** The selection is the same (C0, best epoch 2 everywhere),
+but the numbers are not close:
+
+| Measure | CPU development look | Hosted T4 record | Difference |
+|---|---|---|---|
+| Frozen validation MRR / recall@1 | 0.6991 / 0.5844 | 0.6962 / 0.5779 | −0.0029 / −0.0065 |
+| C0 validation MRR / recall@1 | 0.8284 / 0.7273 | 0.7877 / 0.6753 | −0.0407 / −0.0520 |
+| C1 validation MRR / recall@1 | 0.7962 / 0.6818 | 0.7197 / 0.5909 | −0.0765 / −0.0909 |
+| C2 validation MRR / recall@1 | 0.8270 / 0.7208 | 0.7299 / 0.5909 | −0.0971 / −0.1299 |
+| C2 − C0 validation MRR | −0.0014 (inside the margin) | −0.0578 | C2 no longer near C0 |
+| Exposed frozen recall@1 / MRR | 0.6338 / 0.7422 | 0.6312 / 0.741 | −0.0026 / −0.0012 |
+| Exposed adapted recall@1 / MRR | 0.8026 / 0.8785 | 0.7662 / 0.8498 | −0.0364 / −0.0287 |
+| Exposed Δ MRR | +0.1363 (CI 0.1069 to 0.1664) | +0.1087 (no CI printed) | −0.0276 |
+| Transfer near-domain frozen / adapted MRR | 0.7238 / 0.7833 | 0.7237 / 0.7464 | −0.0001 / −0.0369 |
+| Transfer near-domain Δ (CI queries) | +0.0595 (0.0190 to 0.1082, excludes 0) | +0.0227 (−0.0097 to 0.0579, includes 0) | −0.0368 |
+| Transfer other-8 frozen / adapted MRR | 0.7946 / 0.7736 | 0.7940 / 0.7781 | −0.0006 / +0.0045 |
+| Transfer other-8 Δ (CI queries) | −0.0209 (−0.0418 to −0.0017, excludes 0) | −0.0159 (−0.0348 to 0.0022, includes 0) | +0.0050 |
+| Adapter size | 125,849,896 B (float32) | 62,926,128 B (bfloat16) | dtype |
+| Grid / retrain / transfer time | 1,488.3 / 372.1 / 51.0 s | 138.9 / 47.7 / 11.1 s | device |
+
+The frozen numbers agree to within 0.007 (bfloat16 versus float32 inference). The adapted numbers are 0.03–0.10 MRR lower
+on T4, more so at the lower learning rate (C1, C2). The likely cause (inferred, not tested) is that training on CUDA
+updates bfloat16 weights directly, so AdamW steps of 2e-5 to 5e-5 are partly lost to bfloat16 rounding. Neither CPU
+transfer conclusion (near-domain gain, other-domain loss) is reproduced at T4 precision. None of this changes a
+setting: the CPU look is disclosed, and the hosted run is the record.
+
+**Against the previous hosted run (2026-10-09, blob `26a62b80`).** The exposed-test frozen and adapted metrics, the C0
+validation curve, the lexical baseline, the random floor and the document self-cosine (median 0.8458, minimum 0.7634)
+are equal at printed precision. Every other difference is a PR #14 change: the grid, fresh-test and transfer blocks, the
+split labels, reload parity on validation (0.787748 both ways) instead of the test split, the extra
+`…_grid_validation.json` export and the `started_from` text. The rest is timing.
+
+**Evidence boundary.** Default path only, by CLI sequential execution. BYOD (REL12), the activity and the optional
+experiments were not run. The `outputs/` files stayed on the released VM, so their bytes (per-query ranks, the
+evaluation report, the transfer report) were not inspected.
+
+| Journey | Verdict |
+|---|---|
+| Clean default path (isolated env, no restart; CLI sequential) | PASS |
+| Activity / optional experiments | not assessed in this run |
+| BYOD | not assessed in this run |
+
+Status stays **Candidate**.
+
+### 2026-10-18 pre-registration amendment 1: float32 recipe and fresh test 2
+
+Owner decision (Kurt, 2026-10-18): keep the record, fix the GPU training precision, and pre-register a second fresh test.
+`docs/qwen3-embedding-preregistration-amendment-2026-10-18.md` was committed alone first (`49d82f7`), before any code
+change of this round.
+
+- **Recipe 1 record unchanged.** The hosted T4 run of `1cc43ed` (blob `971187e6`, 2026-10-17) remains the
+  pre-registered evaluation of record for recipe 1 (bf16 CUDA training): fresh-test MRR 0.7338 -> 0.8455, +0.1118, 95 %
+  CI 0.0911 to 0.134 (queries), 0.0711 to 0.1569 (intents). `samples.RECORDED_EVALUATIONS` holds it under recipe 1.
+- **Finding.** `pipeline.py` loaded bfloat16 on CUDA and AdamW stepped the bfloat16 parameters with no float32 master
+  copy; T4 validation MRR C0 0.788 vs CPU float32 0.828 (C1 0.720 vs 0.796, C2 0.730 vs 0.827).
+- **Recipe 2.** float32 on every device (`MODEL_DTYPE`, `model_dtype`); `adapt` refuses non-float32 trainable
+  parameters and checks that the AdamW moments are float32; adapter manifests record their dtype (float32: 125,849,896 B
+  for 2 layers). Chosen over bf16 or fp16 autocast because a T4 has no bf16 tensor cores and fp16 risks overflow in a
+  bf16-trained decoder; memory well under 16 GB. **T4 estimate (not measured):** grid 2.5-5 min, whole session 7-12 min.
+- **Fresh test 2.** 770 (10 per intent) from the 1,770 test.csv messages no run has scored (excluding the exposed 385,
+  W16's 154, the 22 train repeats and fresh test 1's 770; 19-24 per intent), `Random(20261018)`, manifest
+  `cd0171285dfd6ccc72b88d82b43ad856af6869a84a49cc50ac06046119f37a63`; near-duplicates reported: 12 in the draw, 29 in the
+  pool. Only fresh test 2 is scored as the pre-registered evaluation; fresh test 1 is shown every run as
+  "fresh test 1 (scored once, 2026-10-17, bf16 recipe; now an exposed test)".
+- **Recipe-2 record (REL13):** the hosted T4 run of `9ca75dc` (blob `de48070a`, 2026-10-18, cuda float32) — section
+  *2026-10-18 hosted T4 evaluation of record, recipe 2* below. `RECORDED_EVALUATIONS[recipe 2]` is still `None` at this
+  blob and is a pending code follow-up (requote), so a later identical run still prints "pre-registered evaluation (this
+  runtime)"; this file names the run of record. *(Was: none yet; the first hosted pre-registered T4 run of recipe 2 will
+  be THE evaluation of record for it.)*
+- **CPU check (both fresh tests masked; a guard aborted on any fresh-test query).** CPU was already float32, so the grid
+  was not re-run. Smoke on real weights: parameters float32; a 64-pair, 1-epoch C0 adaptation passed both float32
+  checks (validation MRR 0.6991 -> 0.7152; the frozen value equals the 2026-10-17 CPU record); manifest dtype float32,
+  125,849,896 B; reload float32 with identical validation MRR (0.715178 both). Not a hosted run.
+
+### 2026-10-18 hosted T4 evaluation of record, recipe 2 (blob `de48070a`, PR #14 head `9ca75dc`)
+
+**REL13: pre-registered evaluation of record for recipe 2 (float32 on every device; fresh test 2).** This is the first
+hosted run of the recipe-2 pre-registered settings (amendment 2026-10-18) and the first scoring of fresh test 2 by any
+run (the CPU check of the amendment masked both fresh tests). Later hosted runs with identical recipe-2 settings are
+reproductions. The recipe-1 record (2026-10-17, `1cc43ed`, section above) stays the evaluation of record for recipe 1
+and is not replaced; on this run fresh test 1 is an **exposed test**, shown for continuity.
+
+- **Files.** [`docs/execution-evidence/2026-10-18-9ca75dc/`](execution-evidence/2026-10-18-9ca75dc/): executed notebook
+  (SHA-256 `5e4be566f847e0abf6e1646ea5197d78b3199b7ef21fc26670ed2b3bbe3a1843`), `exec.log` (`5040de3b…`) and
+  `run_summary.json` (`b906a644…`), byte for byte (`-text`).
+- **Source match.** The fetched notebook's `git hash-object` is `de48070a3621ed61529948a1b1f3a0e671bf9ed4`, the blob at
+  `9ca75dc`, and it is byte-equal to the committed file. All 40 executed cells have the same ids and order, with no source
+  differences and no `# @param` edits. `NOTEBOOK_SOURCE.repository_revision` `f7f3dc0`, `module_sha256` `cfa5687b…`,
+  generator `build_notebook.py/2.2`, spec 2.5.
+- **Executor.** Colab CLI 0.7.4 (`colab exec -f`) on a fresh Colab VM, Tesla T4 (session `suite-qwen3-9ca75dc-3e4c`,
+  started 2026-10-18 00:38:29 UTC). Sequential CLI execution, not a browser Run all: forms and uploads were not exercised,
+  and the file has no execution counts (order from `exec.log`, cells 1..14). Kernel Python 3.13.15; uv isolated
+  environment CPython 3.12.12, 47 locked packages, built in 51 s; `torch 2.14.0+cu130`, `transformers 4.57.6`; `cuda:0`,
+  **float32** (printed in the fresh-test block).
+- **Execution.** 14/14 code cells (the three carried-module cells print nothing), 0 error outputs, no restart, session wall
+  346.8 s. 11 snapshot files (1,207,487,471 B) fetched from the Hub and digest-verified. Grid 105.0 s, selected re-train
+  35.1 s, transfer check 8.3 s.
+- **Pre-registration.** `preregistered` True, `settings_differing` [], `test_look` "pre-registered evaluation (this
+  runtime)", selected model `adapted C0`.
+
+**Validation grid (154 queries; best epoch 2 for every configuration).**
+
+| Config | Layers | LR | Val MRR by epoch 0 → 1 → 2 | Val recall@1 by epoch | Val MRR |
+|---|---|---|---|---|---|
+| C0 | 2 | 5e-05 | 0.6991 → 0.8118 → 0.8284 | 0.5844 → 0.7013 → 0.7273 | **0.8284** |
+| C1 | 2 | 2e-05 | 0.6991 → 0.7674 → 0.7962 | 0.5844 → 0.6364 → 0.6818 | 0.7962 |
+| C2 | 4 | 2e-05 | 0.6991 → 0.8077 → 0.827 | 0.5844 → 0.7013 → 0.7208 | 0.827 |
+
+Selection **C0** ("no challenger beat C0 by the margin": C1 −0.0322 against C0; C2 −0.0014 against the best 2-layer
+configuration, inside the 0.02 margin; C0 +0.1293 over frozen, so the adapter is kept). The selected re-train repeated the
+C0 curve (recall@5 0.8701 → 0.9675 → 0.974, train loss 0.4788 → 0.1775).
+
+**Fresh test 2 (770 queries, 10 per intent, manifest `cd017128…`), the recipe-2 evaluation of record.**
+
+| System | Recall@1 | Recall@5 | Recall@10 | MRR | Median rank |
+|---|---|---|---|---|---|
+| Frozen | 0.613 | 0.8701 | 0.9312 | 0.7274 | 1 |
+| Adapted C0 | 0.7727 | 0.9675 | 0.9844 | 0.8595 | 1 |
+
+Paired MRR difference **+0.1321**, bootstrap 95 % interval **0.111 to 0.1547** (query-level, pre-registered) and
+**0.0886 to 0.1748** (intent-level, secondary); 240 queries improved, 44 worse, 486 unchanged. Both intervals exclude 0;
+verdict *improved*. Re-derived from the printed values: every recall × 770 is a whole count (frozen 472 / 670 / 717,
+adapted 595 / 745 / 758); each MRR lies inside the bounds its recall@1/5/10 allow over 77 documents; 240 + 44 + 486 = 770;
+the delta is the difference of the printed means; the intent interval is the wider one. The bootstrap was not re-run: the
+per-query ranks stayed on the released VM.
+
+**Fresh test 1 (770, manifest `fe68b43a…`; now an exposed test, scored under recipe 1 on 2026-10-17).** Frozen 0.6338 /
+0.8714 / 0.9312 / MRR 0.7324, adapted 0.7857 / 0.9714 / 0.9831 / MRR 0.8666; paired Δ MRR +0.1342, 95 % CI 0.1113 to
+0.1588 (queries; no intent-level interval printed for this split). Not independent evidence: it is the recipe-1 record's
+test.
+
+**Exposed development test (385; not independent).** Random floor 0.013 / 0.064, lexical 0.3065 / 0.4159, frozen
+0.6338 / 0.7422 (recall@5 0.8857, recall@10 0.9403), adapted 0.8026 / 0.8785 (0.9792, 0.9948) (recall@1 / MRR;
+Δ recall@1 +0.1688, Δ MRR +0.1363). No paired interval is printed for this split on this revision.
+
+**CLINC150 transfer check (display only).**
+
+| Row (T4, float32) | Queries / phrases | Frozen MRR | Adapted MRR | Delta MRR | 95 % CI, queries | 95 % CI, intents | Improved / worse |
+|---|---|---|---|---|---|---|---|
+| Near-domain (CLINC banking + credit_cards) | 60 / 30 | 0.7238 | 0.7833 | +0.0595 | 0.0190 to 0.1082 | 0.0195 to 0.1085 | 14 / 3 |
+| Other 8 domains | 240 / 120 | 0.7946 | 0.7736 | −0.0209 | −0.0418 to −0.0017 | −0.0460 to 0.0026 | 22 / 31 |
+
+The near-domain gain excludes 0 at both levels; the other-domain loss excludes 0 at query level only. This revision prints
+no pooled 150-phrase row.
+
+**Did float32 close the gap?** Yes. Every validation, exposed-test and transfer number the CPU float32 record printed is
+reproduced on the T4 at printed precision; recipe 1 on the T4 was 0.03–0.10 MRR below.
+
+| Measure | CPU float32 record (2026-10-17/18) | Recipe 1, hosted T4 bf16 (2026-10-17) | Recipe 2, hosted T4 float32 (this run) |
+|---|---|---|---|
+| Frozen validation MRR / recall@1 | 0.6991 / 0.5844 | 0.6962 / 0.5779 | 0.6991 / 0.5844 |
+| C0 / C1 / C2 validation MRR | 0.8284 / 0.7962 / 0.8270 | 0.7877 / 0.7197 / 0.7299 | 0.8284 / 0.7962 / 0.827 |
+| C2 − C0 validation MRR | −0.0014 | −0.0578 | −0.0014 |
+| Selection | C0 | C0 | C0 |
+| Exposed frozen recall@1 / MRR | 0.6338 / 0.7422 | 0.6312 / 0.741 | 0.6338 / 0.7422 |
+| Exposed adapted recall@1 / MRR | 0.8026 / 0.8785 | 0.7662 / 0.8498 | 0.8026 / 0.8785 |
+| Exposed Δ MRR | +0.1363 (CI 0.1069 to 0.1664) | +0.1087 | +0.1363 (no CI printed) |
+| Fresh test 1 frozen / adapted MRR | masked | 0.7338 / 0.8455 (record, recipe 1) | 0.7324 / 0.8666 (exposed) |
+| Fresh test 1 Δ MRR (CI queries) | masked | +0.1118 (0.0911 to 0.134) | +0.1342 (0.1113 to 0.1588) |
+| Fresh test 2 | masked | not drawn | 0.7274 → 0.8595, +0.1321 (record, recipe 2) |
+| Transfer near-domain Δ (CI queries) | +0.0595 (0.0190 to 0.1082) | +0.0227 (−0.0097 to 0.0579) | +0.0595 (0.0190 to 0.1082) |
+| Transfer other-8 Δ (CI queries) | −0.0209 (−0.0418 to −0.0017) | −0.0159 (−0.0348 to 0.0022) | −0.0209 (−0.0418 to −0.0017) |
+| Transfer pooled 300 / 150 | +0.0033 (−0.0143 to 0.0217) | not printed | not printed |
+| Reload parity, validation MRR | — | 0.787748 both | 0.828415 both |
+| Document self-cosine min / median | — | 0.7634 / 0.8458 | 0.5197 / 0.6797 |
+| Adapter size | 125,849,896 B | 62,926,128 B | 125,849,896 B |
+| Grid / retrain / transfer time | 1,488.3 / 372.1 / 51.0 s | 138.9 / 47.7 / 11.1 s | 105.0 / 35.1 / 8.3 s |
+| Session wall | — | 382.9 s | 346.8 s |
+
+The only differences from the CPU record are timings and the numbers CPU did not print (fresh tests masked; reload parity
+and self-cosine). The frozen T4 numbers moved from recipe 1 to recipe 2 by at most 0.0065 recall@1 and 0.0029 MRR
+(bfloat16 against float32 inference). The amendment's T4 estimate (grid 2.5–5 min, whole session 7–12 min, not measured) was high: the grid
+took 105.0 s and the session 346.8 s (5.8 min). Peak GPU memory is not printed by the notebook and was not measured.
+
+**Evidence boundary.** Default path only, by CLI sequential execution. BYOD (REL12), the activity and the optional
+experiments were not run. The `outputs/` files stayed on the released VM, so their bytes (per-query ranks, the evaluation
+report, the transfer report) were not inspected.
+
+| Journey | Verdict |
+|---|---|
+| Clean default path (isolated env, no restart; CLI sequential) | PASS |
+| Activity / optional experiments | not assessed in this run |
+| BYOD | not assessed in this run |
+
+Status stays **Candidate**.
+
+### 2026-10-18 hosted T4 reproduction, recipe 2 (blob `4b94d3eb`, PR #14 head `b60347c`)
+
+**REL13 reproduction of the pre-registered evaluation (recipe 2).** A later hosted run with the recipe-2 pre-registered settings of the `9ca75dc` evaluation of record (rule
+item 3); the `9ca75dc` run stays THE recipe-2 result and the recipe-1 record (`1cc43ed`) is untouched. Nothing was
+changed in response to a test number: `9ca75dc..b60347c` sets `samples.RECORDED_EVALUATION` for recipe 2 to the record,
+rewords `FRESH_TEST_1_LABEL` and a docstring ("scored once" → "scored under the recipe-1 pre-registered settings"),
+requotes markdown, and adjusts tests; no pre-registered setting changed. With a recorded evaluation,
+`samples.test_look` labels an identical pre-registered scoring "reproduction".
+
+- **Files.** [`docs/execution-evidence/2026-10-18-b60347c/`](execution-evidence/2026-10-18-b60347c/): executed notebook (SHA-256 `4671d3fbebcc094811d4426052d320ba5869f5880f3f71d2e3696ac947b671d0`), `exec.log`
+  (`4d702897ae59a279925491d65bc7551831e50269bf6f6f09028792e68410b1c6`) and `run_summary.json` (`d8573dba91dc9ce85358c16b41d6b8565a2d47cb55864559f67174dce5066918`), byte for byte (`-text`; the repository keeps `exec.log` unredacted, as in
+  `2026-10-17-1cc43ed` and `2026-10-18-9ca75dc`, so captured and committed hashes are equal).
+- **Source match.** The fetched notebook's `git hash-object` is `4b94d3ebc3fc9b562b11d7466720b1c622442990`, the blob at
+  `b60347c`, byte-equal to the committed file; 40/40 executed cells have the same ids and order, no source differences and
+  no `# @param` edits. `NOTEBOOK_SOURCE.repository_revision` `898cbd3`, `module_sha256` `4eb36dcd…`, generator `build_notebook.py/2.2`, spec 2.5.
+- **Executor.** Colab CLI 0.7.4 (`colab exec -f`), fresh Colab VM, Tesla T4 (session `suite-qwen3-b60347c-3e4c`, started
+  2026-10-18 01:56:04 UTC), CLI sequential execution, not a browser Run all; kernel Python 3.13.15, uv isolated
+  environment CPython 3.12.12 (47 locked packages, 51 s); `torch 2.14.0+cu130`, `transformers 4.57.6`; `cuda:0`, float32.
+- **Execution.** 14/14 code cells, 0 error outputs, no restart, session wall 381.1 s; grid 112.2 s, selected re-train
+  42.6 s, transfer check 9.7 s.
+- **Pre-registration.** `preregistered` True, `settings_differing` [], `test_look` "reproduction" (with the note that a
+  runtime cannot know about other runtimes), files suffixed `_reproduction_1`, selected model `adapted C0`.
+
+**Against the recipe-2 evaluation of record (`9ca75dc`).** All 81 printed output lines are equal except timings, the
+worker pid, the embedded revision and module hash, `test_look`, the `_reproduction_1` file suffix and the reworded
+fresh-test-1 label.
+
+| Measure | Record (`9ca75dc`) | Reproduction (`b60347c`) |
+|---|---|---|
+| Validation grid C0 / C1 / C2 MRR (frozen) | 0.8284 / 0.7962 / 0.827 (0.6991) | same |
+| Fresh test 2 MRR frozen → adapted | 0.7274 → 0.8595 | same |
+| Fresh test 2 recall@1 frozen → adapted | 0.613 → 0.7727 | same |
+| Paired Δ MRR, 95 % CI queries / intents | +0.1321, 0.111 to 0.1547 / 0.0886 to 0.1748 | same |
+| Improved / worse / unchanged | 240 / 44 / 486 | same |
+| Fresh test 1 (exposed) MRR, Δ, CI | 0.7324 → 0.8666, +0.1342, 0.1113 to 0.1588 | same |
+| Exposed development test recall@1 / MRR | 0.6338 / 0.7422 → 0.8026 / 0.8785 | same |
+| CLINC150 near / other Δ MRR | +0.0595 / −0.0209 | same |
+| Reload parity / adapter bytes / SHA-256 prefix | 0.828415 / 125,849,896 / `d0e19c8ede726c98` | same |
+| Session wall / grid / re-train / transfer | 346.8 / 105.0 / 35.1 / 8.3 s | 381.1 / 112.2 / 42.6 / 9.7 s |
+
+**Evidence boundary.** Default path only, by CLI sequential execution; BYOD (REL12), the activity, the optional
+experiments and the W16 workshop notebook (blob `089696de`, unchanged) were not run; `outputs/` stayed on the released VM.
+Status stays **Candidate**.
 
 ## Qwen3 semantic search and reranking notebook — 2026-09-26 follow-up
 
@@ -290,3 +683,18 @@ Status stays **Candidate**. Gates 3 and 4 above (real-model BYOD and the optiona
 | BYOD | not assessed in this run |
 
 Status stays **Candidate**. Gates 3 and 4 above (real-model BYOD and the optional sweep) remain open.
+
+## Execution-log redaction (2026-10-18)
+
+The four committed Colab CLI `exec.log` files named the operator's home directory in their two
+`[colab] ... notebook` lines. Those two lines now read `<local-run-dir>/...`; no other byte changed, and the
+executed notebooks and `run_summary.json` files are untouched. SHA-256 as captured → as committed:
+
+| Log | Captured | Committed |
+|---|---|---|
+| `2026-10-09-6606b82/exec.log` | `fca046a13c129c2939c670a9c5084dc75e638ce1135a20bbb224668f8769e79d` | `1af7833813bcf271722a4a088be64bbe1060a251f7e38e5e24af448edc8c0afe` |
+| `2026-10-17-1cc43ed/exec.log` | `fe1ba2865426298a65a4973d1ff984ced0764a009517c88d95bf9497a8a023c0` | `261a1c5d688a0d69f9cfbf97b5ec47e30cfb9cca5b2f32f0661aa5f556b709f0` |
+| `2026-10-18-9ca75dc/exec.log` | `5040de3b18b8e60eec8a59ce3cd1489e51aabbb55bf63899c19fde561e327bd5` | `30225288b439bfa535199b69480e89b76f24e16b16c0a7f14761ae957d89d64e` |
+| `2026-10-18-b60347c/exec.log` | `4d702897ae59a279925491d65bc7551831e50269bf6f6f09028792e68410b1c6` | `70b1fd1e5246c4fe4e0c41b3082e53813809a80ee7e2b1f704958914dbab9a5a` |
+
+Hashes quoted elsewhere in this file for these logs are the captured values.

@@ -1,0 +1,96 @@
+[colab] Parsing notebook '<local-run-dir>/qwen3-embedding-pipeline-1cc43ed-3e4c3b/qwen3_embedding_colab_1cc43ed_colab-cli-t4.ipynb'...
+[colab] Executing cell 1/14 - Infrastructure: build (or reuse) the isolated environment and route later cells to it...
+{'isolated_environment': '/content/dimer_isolated_env_bfda1e43e3a3', 'reused': False, 'isolated_python': '3.12.12', 'kernel_python': '3.13.15', 'locked_packages': 47, 'setup_seconds': 44}
+{'routed_to': '/content/dimer_isolated_env_bfda1e43e3a3/bin/python', 'worker_pid': 2091, 'worker_reused': False}
+[colab] Executing cell 2/14 - Infrastructure: record the runtime...
+{'notebook_source': {'repository': 'qwen3-embedding-pipeline', 'repository_revision': '6a90df9c0c05e877d110c127f868cce9a5df27a2', 'embedded_module': 'src/qwen3_embedding_pipeline/pipeline.py', 'embedded_modules': ['src/qwen3_embedding_pipeline/metrics.py', 'src/qwen3_embedding_pipeline/pipeline.py', 'src/qwen3_embedding_pipeline/samples.py'], 'module_sha256': '00f2ef5958a8e7e2d6e2335de66633dc0597c12e1150dd003dbf6578dd661243', 'generator': 'build_notebook.py/2.2', 'notebook_spec': '2.5'}, 'python': '3.12.12', 'executable': '/content/dimer_isolated_env_bfda1e43e3a3/bin/python', 'torch': '2.14.0+cu130', 'transformers': '4.57.6', 'cuda': True}
+[colab] Executing cell 3/14 - qwen3_embedding-08...
+[colab] Executing cell 4/14 - qwen3_embedding-10...
+[colab] Executing cell 5/14 - qwen3_embedding-12...
+[colab] Executing cell 6/14 - Infrastructure: stage and digest-verify the pinned snapshot, then load the model...
+{'model_id': 'Qwen/Qwen3-Embedding-0.6B', 'revision': '97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3', 'license': 'apache-2.0', 'files': 11, 'total_bytes': 1207487471}
+{'weights_dir': '/content/weights/qwen3-embedding-0.6b', 'fetched': ['1_Pooling/config.json', 'README.md', 'config.json', 'config_sentence_transformers.json', 'generation_config.json', 'merges.txt', 'model.safetensors', 'modules.json', 'tokenizer.json', 'tokenizer_config.json', 'vocab.json']}
+{'verified_files': 11, 'revision': '97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3'}
+{'device': 'cuda:0', 'source': 'local-snapshot'}
+[colab] Executing cell 7/14 - qwen3_embedding-16...
+{'data_source': 'Banking77 (messages → intent phrases) (PolyAI-LDN/task-specific-datasets @ 57ec275d8078af65b7731c2a98be812d844a6d6b; CC BY 4.0 (Casanueva et al. 2020; PolyAI-LDN/task-specific-datasets))', 'instruction': 'Given a customer support message, retrieve the banking intent it expresses', 'raw_rows': {'train': 10003, 'test': 3080}, 'splits': {'train': 616, 'validation': 154, 'test': 385}, 'n_documents': 77, 'file_sha256': {'train': 'b06e26ac6755...', 'test': 'd12d6e3bc4c3...'}}
+{'train': {'n': 616, 'unique_queries': 616, 'n_documents': 77, 'query_chars': {'min': 16, 'max': 334}, 'digest': 'dacba3957b96e16c...'}}
+{'validation': {'n': 154, 'unique_queries': 154, 'n_documents': 77, 'query_chars': {'min': 14, 'max': 244}, 'digest': '3d07cfd5a1791fc6...'}}
+{'test': {'n': 385, 'unique_queries': 385, 'n_documents': 77, 'query_chars': {'min': 16, 'max': 286}, 'digest': 'df00c83e3188769c...'}}
+{'near_duplicates': {'validation': 5, 'test': 9}, 'threshold_jaccard': 0.8, 'reported_not_removed': True}
+{'fresh_test': {'seed': 20261017, 'per_intent': 10, 'n': 770, 'test_pool_after_filter': 3079, 'exposed_tutorial': 385, 'exposed_workshop_w16': 154, 'exposed_union': 516, 'never_scored': 2563, 'exact_repeats_of_train_csv_dropped': 22, 'manifest_sha256': 'fe68b43ae56b9092ab92f6eeb610b2179222d1dfa04c3eebd9c658ac69c0908f'}, 'scored': 'only under the pre-registered settings, in Section 8'}
+{'fresh_test_near_duplicates': {'threshold_jaccard': 0.8, 'in_fresh_test': 10, 'in_clean_pool': 39, 'reported_not_removed': True}}
+{'reported_split': 'exposed development test'}
+{'near_duplicate': {'split': 'validation', 'query': 'How can I top up my account with a cheque?', 'other_split': 'test', 'other_query': 'How can I top up my account with a card?', 'jaccard': 0.818}}
+{'near_duplicate': {'split': 'validation', 'query': "Why isn't my google pay top up working?", 'other_split': 'train', 'other_query': "Why isn't my google top-up pay working?", 'jaccard': 1.0}}
+{'example': {'id': 'train-0000', 'query': "I deposited money but my balance hasn't been updated yet.", 'positive': 'balance not updated after cheque or cash deposit', 'intent': 'balance_not_updated_after_cheque_or_cash_deposit'}, 'documents': ['Refund not showing up', 'activate my card', 'age limit', 'apple pay or google pay', 'atm support', 'automatic top up', '...']}
+{'probe': 'duplicate id', 'rejected': "duplicate id 'same'"}
+{'probe': 'empty query', 'rejected': 'records[0]: query is empty'}
+{'probe': 'missing field', 'rejected': "records[0] is missing 'positive'"}
+{'probe': 'too small', 'rejected': '3 records; 8..20000 are required'}
+[colab] Executing cell 8/14 - qwen3_embedding-19...
+{'ceilings': {'MAX_BATCH': 64, 'MAX_TEXT_TOKENS': 8192, 'MAX_TEXT_CHARS': 100000, 'EMBEDDING_DIM': 1024, 'MAX_TRAIN_TOKENS': 64, 'KINDS': ('query', 'document')}}
+{'id': 'test-0000', 'query': 'is there a way to do top up with cash deposit', 'gold': 'top up by cash or cheque', 'frozen_top3': [('top up by cash or cheque', 0.8175), ('topping up by card', 0.6914), ('top up by card charge', 0.6889)]}
+{'id': 'test-0001', 'query': 'Why are fees charged on cash withdrawals? I went to withdraw some money earlier ', 'gold': 'cash withdrawal charge', 'frozen_top3': [('cash withdrawal charge', 0.713), ('card payment fee charged', 0.691), ('transfer fee charged', 0.6852)]}
+{'id': 'test-0002', 'query': "Someone else may be using my card.  There are transactions I don't recognize.", 'gold': 'compromised card', 'frozen_top3': [('compromised card', 0.6487), ('card about to expire', 0.6418), ('card linking', 0.6365)]}
+{'n_tokens': [30, 48, 36], 'seconds': {'documents': 4.35, 'queries': 0.196}, 'checks': {'one_vector_per_text': True, 'unit_norm': True, 'contract_fields': True, 'nothing_truncated': True, 'all_values_finite': True}, 'findings': 1, 'documents_in_manifest': 77, 'score_semantics': 'cosine between unit vectors; a similarity, not a probability; no threshold shipped'}
+[colab] Executing cell 9/14 - qwen3_embedding-22...
+{'random_floor': {'recall@1': 0.013, 'recall@5': 0.0649, 'recall@10': 0.1299, 'mrr': 0.064}, 'baseline': 'uniformly random ranking of the document set (expected values)'}
+{'lexical_baseline': {'recall@1': 0.3065, 'recall@5': 0.5039, 'recall@10': 0.6753, 'mrr': 0.4159, 'median_rank': 5}, 'baseline': 'Jaccard overlap of lower-cased alphanumeric tokens between query and document', 'seconds': 0.2}
+{'frozen_model': {'recall@1': 0.6312, 'recall@5': 0.8857, 'recall@10': 0.9377, 'mrr': 0.741, 'median_rank': 1}, 'split': 'exposed development test', 'n_queries': 385, 'n_documents': 77, 'verdict': 'measured', 'adapted': False, 'seconds': 9.3}
+{'frozen_model_validation': {'recall@1': 0.5779, 'recall@5': 0.8636, 'recall@10': 0.9156, 'mrr': 0.6962, 'median_rank': 1}, 'random_floor_validation_mrr': 0.064}
+{'definitions': {'recall@k': 'fraction of queries whose positive document is ranked within the first k of the document set; ties count against the positive', 'mrr': 'mean over queries of 1 / rank of the positive document', 'document_set': 'the sorted unique positive (and explicit negative) documents of the scored dataset'}}
+{'verdict_frozen_vs_random_floor_mrr': 'above'}
+[colab] Executing cell 10/14 - qwen3_embedding-25...
+{'config': 'C0', 'trainable_layers': 2, 'lr': 5e-05}
+{'epoch': 0, 'val_recall@1': 0.5779, 'val_mrr': 0.6962}
+{'epoch': 1, 'val_recall@1': 0.6364, 'val_mrr': 0.7664}
+{'epoch': 2, 'val_recall@1': 0.6753, 'val_mrr': 0.7877}
+{'config': 'C1', 'trainable_layers': 2, 'lr': 2e-05}
+{'epoch': 0, 'val_recall@1': 0.5779, 'val_mrr': 0.6962}
+{'epoch': 1, 'val_recall@1': 0.5844, 'val_mrr': 0.714}
+{'epoch': 2, 'val_recall@1': 0.5909, 'val_mrr': 0.7197}
+{'config': 'C2', 'trainable_layers': 4, 'lr': 2e-05}
+{'epoch': 0, 'val_recall@1': 0.5779, 'val_mrr': 0.6962}
+{'epoch': 1, 'val_recall@1': 0.5844, 'val_mrr': 0.719}
+{'epoch': 2, 'val_recall@1': 0.5909, 'val_mrr': 0.7299}
+{'C0': {'trainable_layers': 2, 'lr': 0.0001, 'best_epoch': 2, 'val_recall@1': 0.6753, 'val_mrr': 0.7877, 'frozen_val_mrr': 0.6962}}
+{'C1': {'trainable_layers': 2, 'lr': 0.0, 'best_epoch': 2, 'val_recall@1': 0.5909, 'val_mrr': 0.7197, 'frozen_val_mrr': 0.6962}}
+{'C2': {'trainable_layers': 4, 'lr': 0.0, 'best_epoch': 2, 'val_recall@1': 0.5909, 'val_mrr': 0.7299, 'frozen_val_mrr': 0.6962}}
+{'selection': {'config': 'C0', 'settings': {'trainable_layers': 2, 'lr': 5e-05}, 'reason': 'no challenger beat C0 by the margin', 'selected_model': 'adapted C0'}, 'margin': 0.02, 'seconds': 138.9}
+[colab] Executing cell 11/14 - qwen3_embedding-28...
+{'epoch': 0, 'train_loss': None, 'val_recall@1': 0.5779, 'val_recall@5': 0.8636, 'val_mrr': 0.6962, 'note': 'frozen model'}
+{'epoch': 1, 'train_loss': 0.5427, 'val_recall@1': 0.6364, 'val_recall@5': 0.9481, 'val_mrr': 0.7664}
+{'epoch': 2, 'train_loss': 0.3208, 'val_recall@1': 0.6753, 'val_recall@5': 0.9545, 'val_mrr': 0.7877}
+{'objective': 'InfoNCE over in-batch documents (contrastive)', 'trainable_parameters': 31461888, 'total_parameters': 595776512, 'train_documents': 77, 'best_epoch': 2, 'selection': 'highest validation MRR', 'started_from': 'pinned base (restored 44 tensors an earlier run changed)', 'seconds': 47.7}
+{'configuration': {'trainable_layers': 2, 'lr': 5e-05}, 'preregistered': True, 'settings_differing': []}
+[colab] Executing cell 12/14 - qwen3_embedding-31...
+{'recall@1': {'random_floor': 0.013, 'lexical': 0.3065, 'frozen': 0.6312, 'adapted': 0.7662}}
+{'recall@5': {'random_floor': 0.0649, 'lexical': 0.5039, 'frozen': 0.8857, 'adapted': 0.9714}}
+{'recall@10': {'random_floor': 0.1299, 'lexical': 0.6753, 'frozen': 0.9377, 'adapted': 0.9896}}
+{'mrr': {'random_floor': 0.064, 'lexical': 0.4159, 'frozen': 0.741, 'adapted': 0.8498}}
+{'split': 'exposed development test'}
+{'median_rank': {'lexical': 5, 'frozen': 1, 'adapted': 1}}
+{'delta_vs_frozen': {'recall@1': 0.1351, 'recall@5': 0.0857, 'recall@10': 0.0519, 'mrr': 0.1087}}
+{'validation_mrr': {'frozen': 0.6962, 'adapted': 0.7877}}
+{'verdict': {'adapted_vs_frozen_mrr': 'improved', 'adapted_vs_frozen_validation_mrr': 'improved', 'frozen_vs_random_floor_validation_mrr': 'above'}}
+{'fresh_test': {'test_look': 'pre-registered evaluation (this runtime)', 'selected_model': 'adapted C0', 'n_queries': 770, 'frozen': {'recall@1': 0.6351, 'recall@5': 0.8688, 'recall@10': 0.9312, 'mrr': 0.7338, 'median_rank': 1}, 'adapted': {'recall@1': 0.761, 'recall@5': 0.9571, 'recall@10': 0.9779, 'mrr': 0.8455, 'median_rank': 1}, 'manifest_sha256': 'fe68b43ae56b9092ab92f6eeb610b2179222d1dfa04c3eebd9c658ac69c0908f', 'device': 'cuda:0', 'dtype': 'bfloat16', 'verdict': 'improved'}}
+{'fresh_test_paired_mrr': {'delta': 0.1118, 'ci95': [0.0911, 0.134], 'improved': 215, 'worse': 39, 'unchanged': 516}, 'ci95_intent_level': [0.0711, 0.1569]}
+{'test_look': 'pre-registered evaluation (this runtime)', 'note': 'a runtime cannot know about other runtimes; docs/release-verification.md names the evaluation of record'}
+{'report': 'outputs/qwen3_embedding_evaluation_report.json'}
+[colab] Executing cell 13/14 - qwen3_embedding-34...
+{'id': 'test-0000', 'gold': 'top up by cash or cheque', 'frozen_top3': 'top up by cash or cheque | topping up by card | top up by card charge', 'adapted_top3': 'top up by cash or cheque | topping up by card | top up by card charge', 'gold_rank_frozen': 1, 'gold_rank_adapted': 1}
+{'id': 'test-0001', 'gold': 'cash withdrawal charge', 'frozen_top3': 'cash withdrawal charge | card payment fee charged | transfer fee charged', 'adapted_top3': 'cash withdrawal charge | cash withdrawal not recognised | card payment fee charged', 'gold_rank_frozen': 1, 'gold_rank_adapted': 1}
+{'id': 'test-0002', 'gold': 'compromised card', 'frozen_top3': 'compromised card | card about to expire | card linking', 'adapted_top3': 'compromised card | card payment not recognised | card about to expire', 'gold_rank_frozen': 1, 'gold_rank_adapted': 1}
+{'document_shift': {'self_cosine_min': 0.7634, 'self_cosine_median': 0.8458}, 'batch_report_verdict': 'not-measurable', 'probes_with_changed_top3': 2, 'of': 3}
+{'artifact': 'outputs/qwen3_embedding_adapter', 'format': 'org.valcorza.qwen3-embedding-0.6b.adapter.v1', 'instruction': 'Given a customer support message, retrieve the banking intent it expresses', 'tensors': 22, 'bytes': 62926128, 'sha256': 'a2b52f05da5c6b0d...'}
+{'reload_parity': {'query_vectors_identical': True, 'mrr_in_memory': 0.787748, 'mrr_reloaded': 0.787748, 'split': 'validation'}, 'reloaded_best_epoch': 2}
+['qwen3_embedding_adapter', 'qwen3_embedding_evaluation_report.json', 'qwen3_embedding_grid_validation.json', 'qwen3_embedding_input_manifest.json', 'qwen3_embedding_result.json', 'qwen3_embedding_retrieval.csv', 'qwen3_embedding_train.csv']
+[colab] Executing cell 14/14 - qwen3_embedding-37...
+{'near-domain (CLINC banking + credit_cards)': {'queries': 60, 'phrases': 30, 'random_floor_mrr': 0.1332, 'lexical': {'recall@1': 0.3833, 'recall@5': 0.6833, 'recall@10': 0.7667, 'mrr': 0.5206, 'median_rank': 2}, 'frozen': {'recall@1': 0.5833, 'recall@5': 0.9167, 'recall@10': 0.95, 'mrr': 0.7237, 'median_rank': 1}, 'adapted': {'recall@1': 0.6, 'recall@5': 0.95, 'recall@10': 0.9667, 'mrr': 0.7464, 'median_rank': 1}}}
+{'near-domain (CLINC banking + credit_cards): paired MRR': {'delta': 0.0227, 'ci95_queries': [-0.0097, 0.0579], 'ci95_intents': [-0.01, 0.0584], 'improved': 12, 'worse': 4}}
+{'other 8 domains': {'queries': 240, 'phrases': 120, 'random_floor_mrr': 0.0447, 'lexical': {'recall@1': 0.2875, 'recall@5': 0.5875, 'recall@10': 0.6083, 'mrr': 0.413, 'median_rank': 3}, 'frozen': {'recall@1': 0.7, 'recall@5': 0.9167, 'recall@10': 0.9417, 'mrr': 0.794, 'median_rank': 1}, 'adapted': {'recall@1': 0.6708, 'recall@5': 0.9083, 'recall@10': 0.95, 'mrr': 0.7781, 'median_rank': 1}}}
+{'other 8 domains: paired MRR': {'delta': -0.0159, 'ci95_queries': [-0.0348, 0.0022], 'ci95_intents': [-0.0381, 0.0062], 'improved': 24, 'worse': 26}}
+{'seconds': 11.1, 'role': 'display only; not a selection input or a stop'}
+{'transfer_report': 'outputs/qwen3_embedding_transfer_check.json'}
+[colab] Saving notebook with outputs to '<local-run-dir>/qwen3-embedding-pipeline-1cc43ed-3e4c3b/qwen3_embedding_colab_1cc43ed_colab-cli-t4_output.ipynb'...

@@ -225,6 +225,8 @@ Seed:
 
 `SAMPLE_SEED = 42`
 
+Keep the seed at 42 for maintainer runs. With any other `SAMPLE_SEED` the draw includes messages from the pinned fresh test of `qwen3_embedding_colab.ipynb` (29–46 of the 154 at seeds 0, 1, 7 and 123; none at 42). Such a run is an exploratory look at that tutorial's fresh test and is recorded in `docs/release-verification.md` as a fresh-test exposure. The workshop's behaviour is unchanged (2026-10-18, row-72 peer review F8).
+
 Each record:
 
 ```text

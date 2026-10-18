@@ -105,35 +105,29 @@ def _m(r1: float, mrr: float) -> dict:
 
 
 def test_qem_m3_sample_path_still_stops_on_a_broken_frozen_model(notebook):
-    namespace = {"frozen_test": _m(0.01, 0.05), "baseline_lexical": _m(0.3, 0.4), "floor": _m(0.013, 0.064), "USE_BYOD": False}
-    with pytest.raises(RuntimeError, match="frozen model must rank above the random floor"):
+    # R72-M3 (DOC11): the stop reads the frozen validation MRR, never a test split.
+    namespace = {"frozen_report": _m(0.6, 0.7), "frozen_val": _m(0.01, 0.05), "val_floor": _m(0.013, 0.064), "baseline_lexical": _m(0.3, 0.4), "USE_BYOD": False}
+    with pytest.raises(RuntimeError, match="frozen model must rank above the random floor on validation"):
         exec(compile(_section_6_tail(notebook), "<section 6>", "exec"), namespace)
     namespace.update(USE_BYOD=True)
     exec(compile(_section_6_tail(notebook), "<section 6>", "exec"), namespace)
     assert namespace["frozen_vs_floor"] == "not above"
 
 
-def _section_8_namespace(adapter, adapted_mrr, use_byod, default_settings):
-    return {
-        "json": json, "pipe": types.SimpleNamespace(adapter=adapter, evaluate=lambda records, **kw: _m(0.7, adapted_mrr)), "test_records": [], "val_records": [],
-        "documents": lambda records: [], "document_set": ["d"] * 77, "INSTRUCTION": "i", "floor": _m(0.013, 0.064), "baseline_lexical": _m(0.3, 0.4),
-        "frozen_test": _m(0.63, 0.741), "frozen_vs_floor": "above", "MODEL_ID": "m", "MODEL_REVISION": "r", "MODEL_KEY": "k", "data_source": "stand-in",
-        "dataset_manifests": {}, "disjoint": {}, "adapt_result": {"history": [], "best_epoch": 0}, "adapt_seconds": 0.0, "near_duplicates": {"near_duplicates": {"test": 9}},
-        "USE_BYOD": use_byod, "DEFAULT_SETTINGS": default_settings,
-    }
+def test_qem_m3_section_8_stops_only_a_preregistered_sample_run_on_validation(notebook, tmp_path, monkeypatch):
+    """R72-M3: the stop moved from the test split to validation, and only pre-registered sample runs are held to it."""
+    from test_row72_review_fixes import section_8_namespace
 
-
-def test_qem_m3_section_8_holds_only_the_default_sample_run_to_an_improvement(notebook, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "outputs").mkdir()
     source = _cell(notebook, "delta_mrr = ")
-    with pytest.raises(RuntimeError, match="adapted MRR must be above the frozen MRR"):
-        exec(compile(source, "<section 8>", "exec"), _section_8_namespace({}, 0.6, False, True))
-    for use_byod, default_settings in ((True, True), (False, False)):
-        namespace = _section_8_namespace({}, 0.6, use_byod, default_settings)
+    with pytest.raises(RuntimeError, match="adapted validation MRR must be above the frozen validation MRR"):
+        exec(compile(source, "<section 8>", "exec"), section_8_namespace(adapted_mrr=0.6, use_byod=False, preregistered=True))
+    for use_byod, preregistered in ((True, False), (False, False)):
+        namespace = section_8_namespace(adapted_mrr=0.6, use_byod=use_byod, preregistered=preregistered)
         exec(compile(source, "<section 8>", "exec"), namespace)
         assert namespace["comparison"]["verdict"]["adapted_vs_frozen_mrr"] == "worse"
-    report = json.loads((tmp_path / "outputs" / "qwen3_embedding_evaluation_report.json").read_text(encoding="utf-8"))
+    report = json.loads((tmp_path / "outputs" / "qwen3_embedding_evaluation_report_exploratory_1.json").read_text(encoding="utf-8"))
     assert report["near_duplicates"] == {"near_duplicates": {"test": 9}}
 
 
@@ -161,13 +155,13 @@ class _Stop(Exception):
 
 
 def test_qem_m2_section_5_puts_the_pinned_base_back_before_embedding(notebook, tmp_path, monkeypatch, capsys):
-    source = _cell(notebook, "probe_records = test_records[:3]")
+    source = _cell(notebook, "probe_records = report_records[:3]")
     assert source.index("pipe.restore_base()") < source.index("pipe.embed(")
     monkeypatch.chdir(tmp_path)
     (tmp_path / "outputs").mkdir()
     pipe = _Pipe(adapted=True)
     namespace = {name: getattr(pl, name) for name in dir(pl) if not name.startswith("__")}
-    namespace.update(pipe=pipe, test_records=_pairs(3, 3), document_set=[f"doc {i}" for i in range(77)], INSTRUCTION="i", json=json)
+    namespace.update(pipe=pipe, report_records=_pairs(3, 3), document_set=[f"doc {i}" for i in range(77)], INSTRUCTION="i", json=json)
     with pytest.raises(_Stop):
         exec(compile(source, "<section 5>", "exec"), namespace)
     assert pipe.calls[0] == "restore_base" and pipe.calls[1] == "embed:document:adapted=False"
@@ -177,7 +171,7 @@ def test_qem_m2_section_5_puts_the_pinned_base_back_before_embedding(notebook, t
 
 def test_qem_m2_section_6_restores_before_the_frozen_evaluation(notebook):
     source = _cell(notebook, "frozen_vs_floor = ")
-    assert source.index("pipe.restore_base()") < source.index("frozen_test = pipe.evaluate(")
+    assert source.index("pipe.restore_base()") < source.index("frozen_report = pipe.evaluate(")
 
 
 @pytest.mark.parametrize("marker", ["delta_mrr = ", "pipe.save_artifact("])
@@ -193,7 +187,7 @@ def test_qem_m2_sections_8_and_9_refuse_the_pinned_base(notebook, marker):
 def test_qem_m2_opening_and_activity_say_which_cells_to_rerun(notebook):
     md = _markdown(notebook)
     assert "Sections 5 and 6 put the pinned base back before they measure" in md
-    assert "Run Section 7, then Section 8." in md
+    assert "Run Section 7 (the grid cell need not run again), then Section 8." in md
     assert "Section 8 or 9 says the pipeline holds the pinned base" in md
 
 
@@ -206,7 +200,7 @@ def test_qem_m4_activity_follows_the_five_steps(notebook):
     steps = [md.index(f"{i}. **{name}.**", start) for i, name in enumerate(("Predict", "Change", "Run", "Observe", "Explain"), 1)]
     assert steps == sorted(steps)
     assert "<details><summary>Check your reasoning</summary>" in md[steps[-1] :]
-    assert "To put the notebook back to the recorded state" in md
+    assert "To put the notebook back to the pre-registered state" in md
 
 
 # --- QEM-m2: leakage key and near-duplicate report --------------------------------------------------------------
@@ -242,7 +236,7 @@ def test_qem_m2_minor_section_4_prints_the_count_and_the_prose_is_honest(noteboo
     source = _cell(notebook, "USE_BYOD = False")
     assert "near_duplicates = near_duplicate_pairs(splits)" in source
     md = _markdown(notebook)
-    assert "9 of the 385 test queries at token Jaccard ≥ 0.8" in md
+    assert "9 of the 385 exposed-development-test queries at token Jaccard ≥ 0.8" in md
     assert "without leakage" not in md
 
 
@@ -250,7 +244,7 @@ def test_qem_m2_minor_section_4_prints_the_count_and_the_prose_is_honest(noteboo
 
 
 def test_qem_m3_minor_input_manifest_lists_all_77_documents(notebook):
-    source = _cell(notebook, "probe_records = test_records[:3]")
+    source = _cell(notebook, "probe_records = report_records[:3]")
     block = source[source.index("document_names = ") : source.index("input_manifest['query_manifest']")]
     namespace = {"validate_inputs": pl.validate_inputs, "MAX_BATCH": pl.MAX_BATCH, "document_set": [f"intent phrase {i}" for i in range(77)]}
     exec(compile(block, "<section 5 manifest>", "exec"), namespace)
@@ -263,13 +257,17 @@ def test_qem_m3_minor_input_manifest_lists_all_77_documents(notebook):
 # --- QEM-m4: device-labelled figures; QEM-S1: spec 2.2 ------------------------------------------------------------
 
 
-def test_qem_m4_section_7_labels_the_device_of_every_quoted_figure(notebook):
+def test_qem_m4_section_7_quotes_no_test_selected_sweep(notebook):
+    # R72-M1/R72-m1: the test-split sweep is gone; the configuration is chosen by the validation grid.
     md = _markdown(notebook)
-    assert "The CPU float32 build record's sweep on this sample" in md
-    assert "the recorded Kaggle Tesla T4 run of the default reached 76.6 %" in md
+    assert "build record's sweep" not in md and "(held-out recall@1)" not in md
+    assert "**7a. The pre-registered validation grid.**" in md
 
 
-def test_qem_s1_notebook_declares_spec_2_2(notebook):
-    assert notebook["metadata"]["dimer"]["notebook_spec"] == "2.2"
+def test_r72_m3_notebook_declares_spec_2_5(notebook):
+    assert notebook["metadata"]["dimer"]["notebook_spec"] == "2.5"
+    assert notebook["metadata"]["dimer"]["notebook_kind"] == "TUTORIAL"
     md = _markdown(notebook)
-    assert "DIMER Notebook Specification 2.2" in md and "DIMER Notebook Specification 2.0" not in md
+    assert "DIMER Notebook Specification 2.5" in md and "DIMER Notebook Specification 2.2" not in md
+    # REL13: each quoted value is labelled with the run it came from.
+    assert md.count("blob `971187e6`") >= 3

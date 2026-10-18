@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 
 from qwen3_embedding_pipeline import pipeline as pl
+from qwen3_embedding_pipeline import samples
 from qwen3_embedding_pipeline.pipeline import Qwen3EmbeddingPipeline as PIPELINE_CLASS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,7 +148,8 @@ def test_swp_g_guided_layer_is_present_and_infrastructure_is_collapsed(notebook)
 
 def test_swp_g_checkpoint_answers_quote_the_recorded_run(notebook):
     md = _markdown(notebook)
-    for value in ("0.6312", "0.7662", "0.3065", "0.741", "0.8498", "0.8125"):
+    # the recipe-2 evaluation of record (T4, 2026-10-18, de48070a): exposed frozen/adapted, lexical, reload parity
+    for value in ("0.6338", "0.8026", "0.3065", "0.7422", "0.8785", "0.828415"):
         assert value in md, value
 
 
@@ -157,7 +159,7 @@ def test_swp_g_checkpoint_answers_quote_the_recorded_run(notebook):
 def test_swp_a_no_model_quality_assert_remains(notebook):
     code = "\n".join(_source(c) for c in _code_cells(notebook) if not c["metadata"].get("dimer", {}).get("embedded_module"))
     asserts = [line.strip() for line in code.splitlines() if line.strip().startswith("assert ")]
-    assert asserts == ["assert parity['query_vectors_identical'] and abs(in_memory_test['mrr'] - reloaded_test['mrr']) < 1e-9"]
+    assert asserts == ["assert parity['query_vectors_identical'] and abs(in_memory_val['mrr'] - reloaded_val['mrr']) < 1e-9"]
 
 
 def _m(r1: float, mrr: float) -> dict:
@@ -167,7 +169,7 @@ def _m(r1: float, mrr: float) -> dict:
 def test_swp_a_section_6_records_frozen_vs_floor_and_keeps_the_contract_check(notebook):
     source = _cell(notebook, "frozen_vs_floor = ")
     snippet = source[source.index("# Contract integrity: both systems ranked the same document set.") :]
-    namespace = {"frozen_test": _m(0.01, 0.05), "baseline_lexical": _m(0.3, 0.4), "floor": _m(0.013, 0.064), "USE_BYOD": True}
+    namespace = {"frozen_report": _m(0.6, 0.7), "frozen_val": _m(0.01, 0.05), "val_floor": _m(0.013, 0.064), "baseline_lexical": _m(0.3, 0.4), "USE_BYOD": True}
     exec(compile(snippet, "<section 6 verdict>", "exec"), namespace)
     assert namespace["frozen_vs_floor"] == "not above"
     namespace["baseline_lexical"] = {**_m(0.3, 0.4), "n_documents": 70}
@@ -177,20 +179,17 @@ def test_swp_a_section_6_records_frozen_vs_floor_and_keeps_the_contract_check(no
 
 @pytest.mark.parametrize(("adapted_mrr", "verdict"), [(0.6, "worse"), (0.741, "no change"), (0.85, "improved")])
 def test_swp_a_section_8_records_the_verdict_and_writes_the_report(notebook, tmp_path, monkeypatch, adapted_mrr, verdict):
+    from test_row72_review_fixes import section_8_namespace
+
     source = _cell(notebook, "delta_mrr = ")
     monkeypatch.chdir(tmp_path)
     (tmp_path / "outputs").mkdir()
-    namespace = {
-        "json": json, "pipe": types.SimpleNamespace(adapter={}, evaluate=lambda records, **kw: _m(0.7, adapted_mrr)), "test_records": [], "val_records": [],
-        "USE_BYOD": True, "DEFAULT_SETTINGS": True, "near_duplicates": {"near_duplicates": {}},
-        "documents": lambda records: [], "document_set": ["d"] * 77, "INSTRUCTION": "i", "floor": _m(0.013, 0.064), "baseline_lexical": _m(0.3, 0.4),
-        "frozen_test": _m(0.63, 0.741), "frozen_vs_floor": "above", "MODEL_ID": "m", "MODEL_REVISION": "r", "MODEL_KEY": "k", "data_source": "stand-in",
-        "dataset_manifests": {}, "disjoint": {}, "adapt_result": {"history": [], "best_epoch": 0}, "adapt_seconds": 0.0,
-    }
+    namespace = section_8_namespace(adapted_mrr=adapted_mrr, use_byod=True, preregistered=False)
     exec(compile(source, "<section 8>", "exec"), namespace)
     assert namespace["comparison"]["verdict"]["adapted_vs_frozen_mrr"] == verdict
-    report = json.loads((tmp_path / "outputs" / "qwen3_embedding_evaluation_report.json").read_text(encoding="utf-8"))
+    report = json.loads((tmp_path / "outputs" / "qwen3_embedding_evaluation_report_exploratory_1.json").read_text(encoding="utf-8"))
     assert report["comparison"]["verdict"]["adapted_vs_frozen_mrr"] == verdict
+    assert report["test_look"] == "not scored (exploratory)"
     assert "'verdict': comparison['verdict']," in _cell(notebook, "result_payload = {")
 
 
@@ -259,6 +258,7 @@ def _byod_namespace(path: str) -> dict:
     loaded = []
     return {
         "USE_BYOD": True, "BYOD_PATH": path, "Path": Path, "loaded": loaded, "SPLIT_SEED": 42,
+        "DatasetRefused": samples.DatasetRefused, "validate_dataset": lambda part, **kw: {},
         "load_byod_dataset": lambda p, **kw: loaded.append(Path(p)) or ["r"],
         "split_dataset": lambda records, seed=0, **kw: {"train": records, "validation": records, "test": records},
     }
@@ -276,9 +276,10 @@ def test_swp_b_byod_path_reads_a_file_without_colab(notebook, tmp_path, monkeypa
 def test_swp_b_missing_path_and_off_colab_upload_give_clear_messages(notebook, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setitem(sys.modules, "google.colab", None)
-    with pytest.raises(FileNotFoundError, match="BYOD_PATH 'nope.csv' is not a file"):
+    # DAT20: acquisition failures are refusals (one message, no traceback in the notebook).
+    with pytest.raises(samples.DatasetRefused, match="BYOD refused: BYOD_PATH 'nope.csv' is not a file"):
         exec(compile(_byod_block(notebook), "<byod>", "exec"), _byod_namespace("nope.csv"))
-    with pytest.raises(RuntimeError, match="upload dialog exists only in Google Colab"):
+    with pytest.raises(samples.DatasetRefused, match="upload dialog exists only in Google Colab"):
         exec(compile(_byod_block(notebook), "<byod>", "exec"), _byod_namespace(""))
 
 
@@ -288,5 +289,5 @@ def test_swp_b_cancelled_or_wrong_upload_is_refused(notebook, tmp_path, monkeypa
     colab = types.ModuleType("google.colab")
     colab.files = types.SimpleNamespace(upload=lambda: uploaded)
     monkeypatch.setitem(sys.modules, "google.colab", colab)
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(samples.DatasetRefused, match=message):
         exec(compile(_byod_block(notebook), "<byod>", "exec"), _byod_namespace(""))
