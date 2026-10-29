@@ -277,13 +277,13 @@ def test_swp_b_missing_path_and_off_colab_upload_give_clear_messages(notebook, t
     monkeypatch.chdir(tmp_path)
     monkeypatch.setitem(sys.modules, "google.colab", None)
     # DAT20: acquisition failures are refusals (one message, no traceback in the notebook).
-    with pytest.raises(samples.DatasetRefused, match="BYOD refused: BYOD_PATH 'nope.csv' is not a file"):
+    with pytest.raises(samples.DatasetRefused, match="^Refused: nope.csv: BYOD_PATH is not a file"):
         exec(compile(_byod_block(notebook), "<byod>", "exec"), _byod_namespace("nope.csv"))
     with pytest.raises(samples.DatasetRefused, match="upload dialog exists only in Google Colab"):
         exec(compile(_byod_block(notebook), "<byod>", "exec"), _byod_namespace(""))
 
 
-@pytest.mark.parametrize(("uploaded", "message"), [(None, "Upload exactly one file \\(received 0"), ({"a.csv": b"", "b.csv": b""}, "received 2"), ({"pairs.xlsx": b""}, "pairs.xlsx: upload one")])
+@pytest.mark.parametrize(("uploaded", "message"), [(None, "^Refused: \\(no file\\): upload exactly one file \\(received 0"), ({"a.csv": b"", "b.csv": b""}, "^Refused: a.csv, b.csv: upload exactly one file \\(received 2"), ({"pairs.xlsx": b""}, "^Refused: pairs.xlsx: upload one")])
 def test_swp_b_cancelled_or_wrong_upload_is_refused(notebook, tmp_path, monkeypatch, uploaded, message):
     monkeypatch.chdir(tmp_path)
     colab = types.ModuleType("google.colab")

@@ -218,11 +218,12 @@ TEMPLATE = {
                 "for _stale in ('splits', 'train_records', 'val_records', 'exposed_records', 'report_records', 'fresh', 'fresh_records', 'fresh1_records', 'grid_selection', 'adapt_result', 'run_settings', 'preregistered'):\n"
                 "    globals().pop(_stale, None)\n"
                 "if USE_BYOD:\n"
+                "    file_name = BYOD_PATH.strip() or '(no file)'  # the file each refusal names\n"
                 "    try:\n"
                 "        if BYOD_PATH.strip():\n"
                 "            byod_path = Path(BYOD_PATH.strip()).expanduser()\n"
                 "            if not byod_path.is_file():\n"
-                "                raise FileNotFoundError(f'BYOD_PATH {{BYOD_PATH!r}} is not a file (relative paths start at {{Path.cwd()}}): give one .csv, .json, .jsonl file holding id, query and positive.')\n"
+                "                raise FileNotFoundError(f'BYOD_PATH is not a file (relative paths start at {{Path.cwd()}}): give one .csv, .json, .jsonl file holding id, query and positive.')\n"
                 "            file_name = byod_path.name\n"
                 "        else:\n"
                 "            try:\n"
@@ -231,10 +232,11 @@ TEMPLATE = {
                 "                raise ValueError('USE_BYOD is True but BYOD_PATH is empty, and the upload dialog exists only in Google Colab: on Kaggle or Jupyter put the file in the runtime and set BYOD_PATH to its path.') from None\n"
                 "            uploaded = files.upload() or {{}}\n"
                 "            if len(uploaded) != 1:\n"
-                "                raise ValueError(f'Upload exactly one file (received {{len(uploaded)}}; a cancelled dialog sends none): run this cell again.')\n"
+                "                file_name = ', '.join(uploaded) or '(no file)'\n"
+                "                raise ValueError(f'upload exactly one file (received {{len(uploaded)}}; a cancelled dialog sends none): run this cell again.')\n"
                 "            file_name, payload = next(iter(uploaded.items()))\n"
                 "            if not file_name.lower().endswith(('.csv', '.json', '.jsonl')):\n"
-                "                raise ValueError(f'{{file_name}}: upload one .csv, .json, .jsonl file holding id, query and positive.')\n"
+                "                raise ValueError('upload one .csv, .json, .jsonl file holding id, query and positive.')\n"
                 "            byod_path = Path('work') / file_name\n"
                 "            byod_path.parent.mkdir(parents=True, exist_ok=True)\n"
                 "            byod_path.write_bytes(payload)\n"
@@ -243,7 +245,7 @@ TEMPLATE = {
                 "        for _name, _part in splits.items():\n"
                 "            validate_dataset(_part) if _name == 'train' else validate_dataset(_part, min_records=1)\n"
                 "    except (OSError, TypeError, ValueError, KeyError) as exc:\n"
-                "        raise DatasetRefused(f'BYOD refused: {{str(exc).rstrip(\".\")}}. Fix the file named here and run this cell again. Files already in outputs/ come from an earlier run and are not this run\\'s result.') from None\n"
+                "        raise DatasetRefused(f'Refused: {{file_name}}: {{str(exc).rstrip(\".\")}}. Fix the file named here and run this cell again. Files already in outputs/ come from an earlier run and are not this run\\'s result.') from None\n"
                 "    data_source = 'BYOD (' + file_name + ')'\n"
                 "    raw_rows = {{'byod': len(records)}}\n"
                 "else:\n"
@@ -918,14 +920,14 @@ TEMPLATE = {
         'record at printed precision; if a number differs, read `settings_differing` and the versions Section 2 prints. The comparison between systems, '
         'not the last digit, is the result.\n- **BYOD: \"CSV is missing columns\" or a record refusal** — the message names the rule: columns `id`, `query`, '
         '`positive` (optional `negative`), at least 12 distinct queries (8 stay for training) and two distinct positives; set `INSTRUCTION` to describe your retrieval task.\n- **BYOD: '
-        '"BYOD_PATH … is not a file"** — the path is relative to the working directory printed in the message; give one .csv, .json or .jsonl file.\n- **BYOD: '
+        '"BYOD_PATH is not a file"** — the path is relative to the working directory printed in the message; give one .csv, .json or .jsonl file.\n- **BYOD: '
         '"the upload dialog exists only in Google Colab"** — on Kaggle or Jupyter, put the file in the runtime and set `BYOD_PATH` to its path.\n- **BYOD: '
-        '"Upload exactly one file"** — the dialog was cancelled or several files were chosen; run the cell again.\n- **Section 8 or 9 says the pipeline '
+        '"upload exactly one file"** — the dialog was cancelled or several files were chosen; run the cell again.\n- **Section 8 or 9 says the pipeline '
         'holds the pinned base** — you re-ran Section 5 or 6 after Section 7, and they put the pretrained weights back so their numbers are the '
         'frozen model\'s. Run Section 7 again, then Section 8 and Section 9.\n- **Section 7b or 8 says the run is exploratory** — a setting differs from the pre-registration (named in '
         '`settings_differing`); that is expected for the Activity, the experiments and BYOD. Set the Section 7b fields back (`LEARNING_RATE = 0`, `TRAINABLE_LAYERS = 0`, '
         'the other defaults), make sure the Section 7a grid ran in this session, and run Sections 7b, 8 and 9 again for a pre-registered pass.\n- **Out of memory in Section 7** — '
-        'choose a GPU runtime; a smaller `BATCH_SIZE` works too but makes the run exploratory.\n- **BYOD refused** — the message names the file and the rule; fix the file '
+        'choose a GPU runtime; a smaller `BATCH_SIZE` works too but makes the run exploratory.\n- **BYOD: "Refused: <file>: …"** — a refused input prints this one line (no traceback) naming the file and the rule; fix the file '
         'and run Section 4 again. Files already in `outputs/` come from an earlier run.\n\n## Glossary\n\n- **Embedding:** a fixed-length '
         'vector (1024 numbers here) that places a text so similar meanings are close; it carries no score by itself.\n- **Last-token pooling / L2 '
         'normalisation:** the vector is the hidden state of the final token, scaled to length 1 so cosine equals the dot product.\n- **Instruction-aware '
