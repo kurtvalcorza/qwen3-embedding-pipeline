@@ -1,0 +1,71 @@
+{
+  "repo": "qwen3-embedding-pipeline",
+  "sha": "1150f33578ba08935f69377bd70310c5be833503",
+  "notebook": "tutorials/qwen3_embedding_colab.ipynb",
+  "blob": "566b523fd7902e81b802b3bc7052ab5c7c53ee60",
+  "gpu": "T4",
+  "session": "suite-qwen3-1150f33-3e4c",
+  "started_utc": "2026-10-29T20:21:59+00:00",
+  "runner": "Colab CLI `colab exec -f` on a fresh session (not a browser Run all)",
+  "overrides": [
+    {
+      "name": "USE_BYOD",
+      "from": "False",
+      "to": "True"
+    },
+    {
+      "name": "BYOD_PATH",
+      "from": "''",
+      "to": "'/etc/hostname'"
+    }
+  ],
+  "run_copy_blob": "f52400569d460cfd4771e744b06ae63335fc39a4",
+  "run_copy_sha256": "35d093cff057c6f1affcd63903eb6e63370870408f91cc83dedd5aca3779c086",
+  "run_copy_note": "refusal run: the run copy is the committed notebook with the listed assignment overrides, cut immediately after the refusal cell and re-serialised (nbformat layout); input_unchanged compares against that copy",
+  "truncated_after_cell": "qwen3_embedding-16",
+  "refusal_cell_ref": "qwen3_embedding-16",
+  "refusal_cell_index": 7,
+  "cells_dropped": 23,
+  "code_cells_dropped": 7,
+  "original_sha256": "100edebdd3c2a431b0e0dd42b78a64b46dd7918955aa666cda90856ad31b65fe",
+  "status": "[suite-qwen3-1150f33-3e4c] gpu-t4-s-usw1b0-15w8ajxjn14yi | Hardware: T4 | Shape: Standard | Variant: GPU | Status: IDLE",
+  "exec_exit_code": 0,
+  "stopped": true,
+  "stop_verified": true,
+  "wall_s": 123.6,
+  "input_unchanged": true,
+  "executed_file": "qwen3_embedding_colab_1150f33_colab-cli-t4_output.ipynb",
+  "log_cells": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "log_total": 7,
+  "code_cells": 7,
+  "executed_cells": 4,
+  "errors": [
+    {
+      "cell": "qwen3_embedding-16",
+      "ename": "IsolatedCellRefusal",
+      "evalue": "Refused: hostname: BYOD datasets must be .csv, .json or .jsonl. Fix the file named here and run this cell again. Files already in outputs/ come from an earlier run and are not this run's result."
+    }
+  ],
+  "execution_counts": [],
+  "sequential": null,
+  "executed_sha256": "40d7c9bc00c61132c03a24e9b85379d8df7dfdf52218bd807f0ea13db4b776ad",
+  "log_sequential_complete": true,
+  "mode": "expect_refusal",
+  "refusal_line": "Refused: hostname: BYOD datasets must be .csv, .json or .jsonl. Fix the file named here and run this cell again. Files already in outputs/ come from an earlier run and are not this run's result.",
+  "halting_cell_index": 7,
+  "halting_cell_id": "qwen3_embedding-16",
+  "error_cells": [
+    7
+  ],
+  "refusal_fail_reasons": [],
+  "refusal_ok": true,
+  "verdict": "PASS"
+}

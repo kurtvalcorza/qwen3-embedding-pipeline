@@ -50,7 +50,7 @@ CODE_MARKERS = (
     "records = load_byod_dataset(byod_path)",
     # DAT20: BYOD refusals are one message; the earlier split is dropped before the new one is built
     "except (OSError, TypeError, ValueError, KeyError) as exc:",
-    "raise DatasetRefused(f'BYOD refused: ",
+    "raise DatasetRefused(f'Refused: {file_name}: ",
     "globals().pop(_stale, None)",
     # R72-M1/s2: the pinned fresh test and the exposed development test
     "fresh = build_fresh_test_2(corpus, splits)",
